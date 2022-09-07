@@ -26,232 +26,128 @@ pub fn concat_u8(first: &[u8], second: &[u8]) -> Vec<u8> {
 // u4.
 // - Check work here: https://iancoleman.io/bip39/
 
-// CRUDE WAY -----------------------------------------------------------------------------------
-fn get_random_8_bit_number() -> u8 {
-    let mut rng = rand::thread_rng();
-    let random_8_bit_number = rng.gen_range(0..u8::MAX);
-    random_8_bit_number
+// Use this many bits when you want to have 12 words
+fn get_128_bits_of_entropy() -> [u8; 32] {
+    let mut data = [0u8; 32];
+    let byte_array = rand::thread_rng().fill_bytes(&mut data);
+    data
 }
 
-// get number between 0 - 15;
-fn get_random_base_16_number() -> u8 {
-    let mut rng = rand::thread_rng();
-    let random_base_16_number: u8 = rng.gen_range(0..=15);
-    random_base_16_number
-}
-
-// get number between 0 - 15, that will represent a rand hex number between 0 - F;
-fn get_random_hexidecimal_number() -> u8 {
-    let random_8_bit_number = get_random_8_bit_number();
-    let random_base_16_number = get_random_base_16_number();
-    random_8_bit_number % (random_base_16_number + 1)
-}
-
-fn get_64_random_hexidecimal_bytes() -> Vec<u8> {
-    vec![0; 64]
-        .iter()
-        .map(|_| get_random_hexidecimal_number())
-        .collect()
-}
-
-fn get_random_256_bit_hexidecimal_string() -> String {
-    get_64_random_hexidecimal_bytes()
-        .iter()
-        .map(|byte| format!("{:x}", byte))
-        .collect::<String>()
-}
-// END CRUDE WAY -----------------------------------------------------------------------------------
-//
-
-fn main() {
-    // let private_key = create_private_key();
-    // println!("{}", private_key);
-    // // let secp = Secp256k1::new();
-    // let mut rng = rand::thread_rng();
-    // let secret_key = SecretKey::new(&mut rng);
-    // let private_key = secret_key.display_secret();
-    // println!("secret_key: {:#?}", private_key);
-
-    // let entropy: [u8; 16] = rng.gen();
-    // println!("entropy: {:#?}", entropy);
-
-    let random_128: u128 = random();
-    let random_128_1: u128 = random();
-    let random_128_2: u128 = random();
-    let random_128_3: u128 = random();
-    println!("rand 256 bit: {}", random_128);
-    println!("rand 256 bit: {}", random_128_1);
-    println!("rand 256 bit: {}", random_128_2);
-    println!("rand 256 bit: {}", random_128_3);
-    println!("random 8 bit number: {}", get_random_8_bit_number());
-    println!("random base 16 number: {}", get_random_base_16_number());
-    println!(
-        "random hexidecimal number: {}",
-        get_random_hexidecimal_number()
-    );
-    println!("random 64 bytes: {:?}", get_64_random_hexidecimal_bytes());
-    println!(
-        "random 256 bit hex string: {:?}",
-        get_random_256_bit_hexidecimal_string()
-    );
-
-    // Seed u8 from integer seed
-    let mut rng = rand_chacha::ChaCha8Rng::seed_from_u64(10);
-    println!("Random f32: {}", rng.gen::<u8>());
-
-    // Create a random byte array
+// Use this many bits when you want to have 24 words
+fn get_256_bits_of_entropy() -> [u8; 64] {
     let mut data = [0u8; 64];
-    rand::thread_rng().fill_bytes(&mut data);
-    println!("{:?}", data);
+    let byte_array = rand::thread_rng().fill_bytes(&mut data);
+    data
+}
 
-    // Using a fresh seed (direct from the OS)
-    let mut rng = ChaCha20Rng::from_entropy();
-    println!("{}", rng.gen_range(0..100));
-
-    // create and store a seed. Then use that seed in the generator
-    let mut seed: <ChaCha8Rng as SeedableRng>::Seed = Default::default();
-    println!("{:?}", seed);
-    thread_rng().fill(&mut seed);
-    let mut rng = ChaCha8Rng::from_seed(seed);
-    println!("{}", rng.gen_range(0..100));
-
-    //  String or hashable data as seed
-    // In one line:
-    let mut rng: Pcg64 = Seeder::from("stripy zebra").make_rng();
-    println!("{:?}", rng.gen::<u8>());
-
-    // If we want to be more explicit, first we create a SipRng:
-    let hasher = SipHasher::from("a sailboat");
-    let mut hasher_rng = hasher.into_rng();
-    // (Note: hasher_rng is a full RNG and can be used directly.)
-
-    // Now, we use hasher_rng to create a seed:
-    let mut seed: <Pcg64 as SeedableRng>::Seed = Default::default();
-    println!("seed:{:?}", seed);
-    hasher_rng.fill(&mut seed);
-
-    // And create our RNG from that seed:
-    let mut rng = Pcg64::from_seed(seed);
-    println!("{:?}", rng.gen::<u8>());
-
-    let mut data1 = [0u8; 64];
-    println!("{:?}", rng.fill_bytes(&mut data1));
-
-    const WORD_COUNT: u64 = 24;
-    // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
-    // Create array of length 32 and fill with a random u8;
-    fn get_128_bits_of_entropy() -> [u8; 32] {
-        let mut data = [0u8; 32];
-        let byte_array = rand::thread_rng().fill_bytes(&mut data);
-        data
-    }
-    fn get_256_bits_of_entropy() -> [u8; 64] {
-        let mut data = [0u8; 64];
-        let byte_array = rand::thread_rng().fill_bytes(&mut data);
-        data
-    }
-
-    // USE THIS TO GET 12 words
-    // let entropy = get_128_bits_of_entropy();
-    // USE THIS TO GET 24 words
-    let entropy = get_256_bits_of_entropy();
-
+fn get_hex_string_from_entropy_byte_array(entropy_byte_array: &[u8]) -> String {
     // Use that array to then create a length 32 array but with hexidecimal values, since we want
     // each item of the array to represent only 4 bits, which is how many bits a hex represents
-    let entropy_array_with_base_16_numbers: Vec<u8> = entropy.iter().map(|num| num % 16).collect();
+    let entropy_array_with_base_16_numbers: Vec<u8> =
+        entropy_byte_array.iter().map(|num| num % 16).collect();
     // turn hex byte array into hex string
-
     let hex_string = entropy_array_with_base_16_numbers
         .iter()
         .map(|byte| format!("{:x}", byte))
         .collect::<String>();
-    //let hex_string = "a4b836c41875815e8b153bc89091f1d85dd1ae47287289f5a50ff23cf41b8d21";
-    //let hex_string = "da490f7254f80aa2f7e8dcb3c63a8404";
-    println!("hex_string {:?}", hex_string);
+    hex_string
+}
 
-    let entropy_hex_byte_array = decode_hex(&hex_string).unwrap();
-    println!("entropy_hex_byte_array {:?}", entropy_hex_byte_array);
-    println!("entropy_hex_byte_array {:?}", entropy_hex_byte_array.len());
-
-    // 2) Calculate the SHA256 of the entropy.
+fn sha256_entropy_hex_byte_array(hex_byte_array: &Vec<u8>) -> Vec<u8> {
     let mut hasher = Sha256::new();
     // write input message
-    hasher.update(&entropy_hex_byte_array);
+    hasher.update(&hex_byte_array);
     // read hash digest and consume hasher
     let sha256_result = hasher.finalize();
-    println!("sha256_result {:?}", sha256_result);
-    // 3) Append the first entropy_length/32 bits of the SHA256 of the entropy at the end of the entropy. For example, in our case we will append the first 4 bits of the SHA256(entropy) to the entropy since our entropy is 128 bits.
-    let mut entropy_hex_binary_string = String::new();
-    for i in entropy_hex_byte_array {
-        let binary_str = convert_to_binary_string(i, true);
-        println!("{}", binary_str);
-        entropy_hex_binary_string.push_str(binary_str.as_str())
+    sha256_result.to_vec()
+}
+fn convert_to_binary_string(num: u8, bits_to_show_count: u64) -> String {
+    fn crop_letters(s: &str, pos: usize) -> &str {
+        match s.char_indices().skip(pos).next() {
+            Some((pos, _)) => &s[pos..],
+            None => "",
+        }
     }
-    println!("entropy_hex_binary_string: {:?}", entropy_hex_binary_string);
-    println!(
-        "split: {:?}",
-        split_string_with_spaces_for_substrings_with_length(&entropy_hex_binary_string, 11)
-    );
-    println!("yooooooooooo{}", entropy_hex_binary_string.len());
-    let bits_to_append_count = (&entropy_hex_binary_string.len()) / 32;
-    println!("bits_to_append_count: {:?}", bits_to_append_count);
-    let first_item = sha256_result[0];
-    println!("first_item: {:?}", first_item);
-    let first_item_as_binary_string = convert_to_binary_string(first_item, true);
-    let checksum_binary_string = &first_item_as_binary_string[0..bits_to_append_count];
-    println!(
-        "first_item_as_binary_string: {:?}",
-        first_item_as_binary_string
-    );
-    println!("checksum: {:?}", checksum_binary_string);
-    // 4) Each word of the mnemonic represents 11 bits. Hence, if you check the wordlist you will find 2048 unique words. Now, divide the entropy + checksum into parts of 11 bits each.
-    fn convert_to_binary_string(num: u8, format_with_8_bits: bool) -> String {
-        fn crop_letters(s: &str, pos: usize) -> &str {
-            match s.char_indices().skip(pos).next() {
-                Some((pos, _)) => &s[pos..],
-                None => "",
+    fn format_binary_with_4_bits(num: u8) -> String {
+        // The 06 pads with zeros to a width of 6. That width includes 0b (length=2)
+        format!("{:#06b}", num)
+    }
+    fn format_binary_with_8_bits(num: u8) -> String {
+        // The 10 pads with zeros to a width of 10. That width includes 0b (length=2)
+        format!("{:#010b}", num)
+    }
+    let binary_string_with_prefix = match bits_to_show_count {
+        4 => format_binary_with_4_bits(num),
+        8 => format_binary_with_8_bits(num),
+        _ => panic!(
+            "binary_string_without_prefix: bits_to_show_count of {} not supported",
+            bits_to_show_count
+        ),
+    };
+    let binary_string_without_prefix = crop_letters(&binary_string_with_prefix, 2);
+    binary_string_without_prefix.to_string()
+}
+
+fn get_binary_string_for_byte_array(byte_array: &Vec<u8>) -> String {
+    let mut binary_string = String::new();
+    for i in byte_array {
+        let binary_str = convert_to_binary_string(*i, 8);
+        binary_string.push_str(binary_str.as_str())
+    }
+    binary_string
+}
+fn split_string_with_spaces_for_substrings_with_length(s: &str, length: u64) -> String {
+    let string_with_spaces_seperating_substrings =
+        s.chars().enumerate().fold(String::new(), |acc, (i, c)| {
+            //if i != 0 && i == 11 {
+            if i != 0 && (i % length as usize == 0) {
+                format!("{} {}", acc, c)
+            } else {
+                format!("{}{}", acc, c)
             }
-        }
-        fn format_binary_with_4_bits(num: u8) -> String {
-            // The 06 pads with zeros to a width of 6. That width includes 0b (length=2)
-            format!("{:#06b}", num)
-        }
-        fn format_binary_with_8_bits(num: u8) -> String {
-            // The 10 pads with zeros to a width of 10. That width includes 0b (length=2)
-            format!("{:#010b}", num)
-        }
-        let binary_string_with_prefix = if format_with_8_bits {
-            format_binary_with_8_bits(num)
-        } else {
-            format_binary_with_4_bits(num)
-        };
-        let binary_string_without_prefix = crop_letters(&binary_string_with_prefix, 2);
-        binary_string_without_prefix.to_string()
-    }
-    let entropy_plus_checksum_binary =
-        format!("{}{}", entropy_hex_binary_string, checksum_binary_string);
-    fn split_string_with_spaces_for_substrings_with_length(s: &str, length: u64) -> String {
-        let string_with_spaces_seperating_substrings =
-            s.chars().enumerate().fold(String::new(), |acc, (i, c)| {
-                //if i != 0 && i == 11 {
-                if i != 0 && (i % length as usize == 0) {
-                    format!("{} {}", acc, c)
-                } else {
-                    format!("{}{}", acc, c)
-                }
-            });
-        string_with_spaces_seperating_substrings
-    }
+        });
+    string_with_spaces_seperating_substrings
+}
+
+fn split_binary_string_into_framents_of_11_bits(binary_string: &str) -> Vec<String> {
     let entropy_plus_checksum_binary_with_spaces_seperating =
-        split_string_with_spaces_for_substrings_with_length(&entropy_plus_checksum_binary, 11);
+        split_string_with_spaces_for_substrings_with_length(&binary_string, 11);
     let word_binary: Vec<&str> = entropy_plus_checksum_binary_with_spaces_seperating
         .split(" ")
         .collect();
-    fn convert_binary_to_int(binary_string: &str) -> isize {
-        let bin_idx = binary_string;
-        let intval = isize::from_str_radix(bin_idx, 2).unwrap();
-        intval
-    }
+    word_binary.iter().map(|&s| s.to_string()).collect()
+}
+
+fn convert_binary_to_int(binary_string: &str) -> isize {
+    let bin_idx = binary_string;
+    let intval = isize::from_str_radix(bin_idx, 2).unwrap();
+    intval
+}
+
+fn main() {
+    // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
+    // Create array of length 32 and fill with a random u8;
+    let entropy = get_128_bits_of_entropy();
+
+    //let hex_string = "a4b836c41875815e8b153bc89091f1d85dd1ae47287289f5a50ff23cf41b8d21";
+    //let hex_string = "da490f7254f80aa2f7e8dcb3c63a8404";
+    let entropy_hex_string = get_hex_string_from_entropy_byte_array(&entropy);
+    let entropy_hex_byte_array = decode_hex(&entropy_hex_string).unwrap();
+
+    // 2) Calculate the SHA256 of the entropy.
+    let sha256_result = sha256_entropy_hex_byte_array(&entropy_hex_byte_array);
+    // 3) Append the first entropy_length/32 bits of the SHA256 of the entropy at the end of the entropy. For example, in our case we will append the first 4 bits of the SHA256(entropy) to the entropy since our entropy is 128 bits.
+    let entropy_hex_binary_string = get_binary_string_for_byte_array(&entropy_hex_byte_array);
+    let bits_to_append_count = (&entropy_hex_binary_string.len()) / 32;
+    let sha256_result_binary_string = get_binary_string_for_byte_array(&sha256_result);
+    let checksum_binary_string = &sha256_result_binary_string[0..bits_to_append_count];
+
+    // 4) Each word of the mnemonic represents 11 bits. Hence, if you check the wordlist you will find 2048 unique words. Now, divide the entropy + checksum into parts of 11 bits each.
+    let entropy_plus_checksum_binary =
+        format!("{}{}", entropy_hex_binary_string, checksum_binary_string);
+
+    let word_binary = split_binary_string_into_framents_of_11_bits(&entropy_plus_checksum_binary);
+
     let words: Vec<String> = word_binary
         .iter()
         .map(|word_binary_string| {
