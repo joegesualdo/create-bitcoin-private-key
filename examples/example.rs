@@ -144,13 +144,14 @@ fn main() {
     // each item of the array to represent only 4 bits, which is how many bits a hex represents
     let entropy_array_with_base_16_numbers: Vec<u8> = data.iter().map(|num| num % 16).collect();
     // turn hex byte array into hex string
-    let hex_string = entropy_array_with_base_16_numbers
-        .iter()
-        .map(|byte| format!("{:x}", byte))
-        .collect::<String>();
+
+    // let hex_string = entropy_array_with_base_16_numbers
+    //     .iter()
+    //     .map(|byte| format!("{:x}", byte))
+    //     .collect::<String>();
+    let hex_string = "a5d4ce235231f3e19613747b760c247bc836001b5574415fe371f2118861a115";
     println!("hex_string {:?}", hex_string);
 
-    // let test_hex = "D9CDF0AF13CBFB1DDF18275D0EC237EE".to_string();
     let entropy_hex_byte_array = decode_hex(&hex_string).unwrap();
     println!("entropy_hex_byte_array {:?}", entropy_hex_byte_array);
 
