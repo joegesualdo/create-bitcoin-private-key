@@ -1,22 +1,35 @@
-use std::num::ParseIntError;
+use std::fmt::UpperHex;
+use std::fmt::Write;
+use std::num::{NonZeroU32, ParseIntError};
+use std::str::FromStr;
 
 use create_bitcoin_private_key::bip39::WORDS;
 use create_bitcoin_private_key::create_private_key;
-use rand::prelude::*;
+use hmac_sha512::HMAC;
 use rand::prelude::*;
 use rand::{random, rngs::StdRng, thread_rng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use rand_chacha::ChaCha8Rng;
 use rand_pcg::Pcg64;
 use rand_seeder::{Seeder, SipHasher};
+use ring::{digest, pbkdf2};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::{Digest, Sha256, Sha512};
+
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..s.len())
         .step_by(2)
         .map(|i| u8::from_str_radix(&s[i..i + 2], 16))
         .collect()
 }
+pub fn encode_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        write!(&mut s, "{:02x}", b).unwrap();
+    }
+    s
+}
+
 pub fn concat_u8(first: &[u8], second: &[u8]) -> Vec<u8> {
     [first, second].concat()
 }
@@ -133,6 +146,7 @@ fn main() {
     //let hex_string = "a4b836c41875815e8b153bc89091f1d85dd1ae47287289f5a50ff23cf41b8d21";
     //let hex_string = "da490f7254f80aa2f7e8dcb3c63a8404";
     let entropy_hex_string = get_hex_string_from_entropy_byte_array(&entropy);
+    // let entropy_hex_string = "731180c4b776f6b961da802ff55b153f".to_string();
     let entropy_hex_byte_array = decode_hex(&entropy_hex_string).unwrap();
 
     // 2) Calculate the SHA256 of the entropy.
@@ -156,5 +170,84 @@ fn main() {
             WORDS.get(word_num as usize).unwrap().to_string()
         })
         .collect();
-    println!("{:?}", words)
+    println!("{:?}", words);
+
+    let mnemonic_sentence = words.join(" ");
+    println!("{:?}", mnemonic_sentence);
+
+    // ===== CREATE A PRIVATE KEY (512 bit seed) ==========================
+    const CREDENTIAL_LEN: usize = digest::SHA512_OUTPUT_LEN;
+    let n_iter = NonZeroU32::new(2048).unwrap();
+    let rng = thread_rng();
+    // let rng = SystemRandom::new();
+
+    // Optional passphase
+    let passphrase = "woowee";
+    let salt = format!("{}{}", "mnemonic", passphrase);
+    let mut salt_as_bytes = salt.as_bytes().to_owned();
+    // rand::thread_rng().fill_bytes(&mut salt);
+
+    let password = mnemonic_sentence.clone();
+    let mut password_as_bytes = password.as_bytes().to_owned();
+    let mut pbkdf2_hash = [0u8; CREDENTIAL_LEN];
+
+    pbkdf2::derive(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        &salt_as_bytes,
+        password.as_bytes(),
+        &mut pbkdf2_hash,
+    );
+    println!("salt: {:?}", encode_hex(&salt_as_bytes));
+    println!("PBKDF2 hash: {:?}", encode_hex(&pbkdf2_hash));
+
+    let bip39_seed = encode_hex(&pbkdf2_hash);
+
+    // DELETE
+    // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
+    // let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
+
+    println!("bip39 seed: {:?}", bip39_seed);
+    // println!("Salt: {}", HEXUPPER.encode(&salt));
+    // println!("PBKDF2 hash: {}", HEXUPPER.encode(&pbkdf2_hash));
+
+    let wrong_password = "Definitely not the correct password";
+
+    let should_fail = pbkdf2::verify(
+        pbkdf2::PBKDF2_HMAC_SHA512,
+        n_iter,
+        &salt.as_bytes(),
+        wrong_password.as_bytes(),
+        &pbkdf2_hash,
+    );
+    println!("should fail: {:?}", should_fail);
+
+    // =============================
+    let key = "Bitcoin seed";
+    let h = HMAC::mac(pbkdf2_hash.to_vec(), key.as_bytes());
+    println!("len: {:?}", h.len());
+    println!("hmac: {:?}", encode_hex(&h));
+    println!("hmac: {:?}", h.len());
+    let left = &h[0..=31];
+    let master_private_key = left;
+    let master_private_key_hex = encode_hex(master_private_key);
+    let right = &h[32..];
+    let master_chain_code = right;
+    println!("left: {:?}", encode_hex(left));
+    println!("right: {:?}", encode_hex(right));
+    println!("master_private_key: {:?}", encode_hex(master_private_key));
+    println!("master_chain_code: {:?}", encode_hex(master_chain_code));
+    // How do I get master public key:
+    // https://learnmeabitcoin.com/technical/extended-keys
+    fn get_uncompressed_public_key_from_private_key(private_key: &str) -> String {
+        // Create 512 bit public key
+        let secp = Secp256k1::new();
+        let secret_key = SecretKey::from_str(private_key).unwrap();
+        // We're getting the OLDER uncompressed version of the public key:
+        //    Source: https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+        let public_key_uncompressed = secret_key.public_key(&secp).serialize();
+        encode_hex(&public_key_uncompressed)
+    }
+    let master_public_key = get_uncompressed_public_key_from_private_key(&master_private_key_hex);
+    println!("master_public_key: {:?}", master_public_key);
 }
