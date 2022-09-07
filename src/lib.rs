@@ -1,6 +1,11 @@
+pub mod bip39;
+// Resource:
+// - https://github.com/AleoHQ/wagyu/tree/master/bitcoin
+// - https://bitcoin.stackexchange.com/questions/89814/how-does-bip-39-mnemonic-work
+// - https://www.freecodecamp.org/news/how-to-generate-your-very-own-bitcoin-private-key-7ad0f4936e6c
 use rand::Rng;
 
-pub fn create_private_key() -> String {
+pub fn create_256_bit_private_key_custom() -> String {
     // we create an array that will store the byte representation of each of our numbers. We're
     //   going to have 64 numbers, so the length will be 64, where each item represents a 16 byte
     //   number (0 -15).
@@ -35,6 +40,10 @@ pub fn create_private_key() -> String {
         .map(|byte| format!("{:x}", byte))
         .collect::<String>();
     s
+}
+
+pub fn create_private_key() -> String {
+    create_256_bit_private_key_custom()
 }
 
 #[cfg(test)]
