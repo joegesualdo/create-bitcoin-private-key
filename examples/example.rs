@@ -24,6 +24,7 @@ pub fn concat_u8(first: &[u8], second: &[u8]) -> Vec<u8> {
 // Notes
 // - A hexidecimal is represetnted by only 4 bits (one byte). We use u8 here because we can't use a
 // u4.
+// - Check work here: https://iancoleman.io/bip39/
 
 // CRUDE WAY -----------------------------------------------------------------------------------
 fn get_random_8_bit_number() -> u8 {
@@ -136,24 +137,41 @@ fn main() {
     let mut data1 = [0u8; 64];
     println!("{:?}", rng.fill_bytes(&mut data1));
 
+    const WORD_COUNT: u64 = 24;
     // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
     // Create array of length 32 and fill with a random u8;
-    let mut data = [0u8; 32];
-    let byte_array = rand::thread_rng().fill_bytes(&mut data);
+    fn get_128_bits_of_entropy() -> [u8; 32] {
+        let mut data = [0u8; 32];
+        let byte_array = rand::thread_rng().fill_bytes(&mut data);
+        data
+    }
+    fn get_256_bits_of_entropy() -> [u8; 64] {
+        let mut data = [0u8; 64];
+        let byte_array = rand::thread_rng().fill_bytes(&mut data);
+        data
+    }
+
+    // USE THIS TO GET 12 words
+    // let entropy = get_128_bits_of_entropy();
+    // USE THIS TO GET 24 words
+    let entropy = get_256_bits_of_entropy();
+
     // Use that array to then create a length 32 array but with hexidecimal values, since we want
     // each item of the array to represent only 4 bits, which is how many bits a hex represents
-    let entropy_array_with_base_16_numbers: Vec<u8> = data.iter().map(|num| num % 16).collect();
+    let entropy_array_with_base_16_numbers: Vec<u8> = entropy.iter().map(|num| num % 16).collect();
     // turn hex byte array into hex string
 
     let hex_string = entropy_array_with_base_16_numbers
         .iter()
         .map(|byte| format!("{:x}", byte))
         .collect::<String>();
-    // let hex_string = "a5d4ce235231f3e19613747b760c247bc836001b5574415fe371f2118861a115";
+    //let hex_string = "a4b836c41875815e8b153bc89091f1d85dd1ae47287289f5a50ff23cf41b8d21";
+    //let hex_string = "da490f7254f80aa2f7e8dcb3c63a8404";
     println!("hex_string {:?}", hex_string);
 
     let entropy_hex_byte_array = decode_hex(&hex_string).unwrap();
     println!("entropy_hex_byte_array {:?}", entropy_hex_byte_array);
+    println!("entropy_hex_byte_array {:?}", entropy_hex_byte_array.len());
 
     // 2) Calculate the SHA256 of the entropy.
     let mut hasher = Sha256::new();
@@ -163,20 +181,29 @@ fn main() {
     let sha256_result = hasher.finalize();
     println!("sha256_result {:?}", sha256_result);
     // 3) Append the first entropy_length/32 bits of the SHA256 of the entropy at the end of the entropy. For example, in our case we will append the first 4 bits of the SHA256(entropy) to the entropy since our entropy is 128 bits.
-    let bits_to_append_count = (&entropy_hex_byte_array.len() * 4) / 32;
+    let mut entropy_hex_binary_string = String::new();
+    for i in entropy_hex_byte_array {
+        let binary_str = convert_to_binary_string(i, true);
+        println!("{}", binary_str);
+        entropy_hex_binary_string.push_str(binary_str.as_str())
+    }
+    println!("entropy_hex_binary_string: {:?}", entropy_hex_binary_string);
+    println!(
+        "split: {:?}",
+        split_string_with_spaces_for_substrings_with_length(&entropy_hex_binary_string, 11)
+    );
+    println!("yooooooooooo{}", entropy_hex_binary_string.len());
+    let bits_to_append_count = (&entropy_hex_binary_string.len()) / 32;
     println!("bits_to_append_count: {:?}", bits_to_append_count);
     let first_item = sha256_result[0];
     println!("first_item: {:?}", first_item);
     let first_item_as_binary_string = convert_to_binary_string(first_item, true);
-    let first_four_bits_binary_string = &first_item_as_binary_string[0..4];
+    let checksum_binary_string = &first_item_as_binary_string[0..bits_to_append_count];
     println!(
         "first_item_as_binary_string: {:?}",
         first_item_as_binary_string
     );
-    println!(
-        "first_four_bits_binary_string: {:?}",
-        first_four_bits_binary_string
-    );
+    println!("checksum: {:?}", checksum_binary_string);
     // 4) Each word of the mnemonic represents 11 bits. Hence, if you check the wordlist you will find 2048 unique words. Now, divide the entropy + checksum into parts of 11 bits each.
     fn convert_to_binary_string(num: u8, format_with_8_bits: bool) -> String {
         fn crop_letters(s: &str, pos: usize) -> &str {
@@ -201,21 +228,8 @@ fn main() {
         let binary_string_without_prefix = crop_letters(&binary_string_with_prefix, 2);
         binary_string_without_prefix.to_string()
     }
-    let mut entropy_hex_binary_string = String::new();
-    for i in entropy_hex_byte_array {
-        let binary_str = convert_to_binary_string(i, true);
-        println!("{}", binary_str);
-        entropy_hex_binary_string.push_str(binary_str.as_str())
-    }
-    println!("entropy_hex_binary_string: {:?}", entropy_hex_binary_string);
-    println!(
-        "split: {:?}",
-        split_string_with_spaces_for_substrings_with_length(&entropy_hex_binary_string, 11)
-    );
-    let entropy_plus_checksum_binary = format!(
-        "{}{}",
-        entropy_hex_binary_string, first_four_bits_binary_string
-    );
+    let entropy_plus_checksum_binary =
+        format!("{}{}", entropy_hex_binary_string, checksum_binary_string);
     fn split_string_with_spaces_for_substrings_with_length(s: &str, length: u64) -> String {
         let string_with_spaces_seperating_substrings =
             s.chars().enumerate().fold(String::new(), |acc, (i, c)| {
