@@ -25,6 +25,7 @@ pub fn concat_u8(first: &[u8], second: &[u8]) -> Vec<u8> {
 // - A hexidecimal is represetnted by only 4 bits (one byte). We use u8 here because we can't use a
 // u4.
 // - Check work here: https://iancoleman.io/bip39/
+// - https://bitcoin.stackexchange.com/questions/89814/how-does-bip-39-mnemonic-work
 
 // Use this many bits when you want to have 12 words
 fn get_128_bits_of_entropy() -> [u8; 32] {
