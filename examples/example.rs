@@ -11,6 +11,12 @@
 // - https://bitcointalk.org/index.php?topic=5288888.0
 // - https://medium.com/mycrypto/the-journey-from-mnemonic-phrase-to-address-6c5e86e11e14
 // - https://academy.bit2me.com/en/que-es-la-master-private-key/
+// - https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
+// - https://docs.rs/secp256k1/latest/secp256k1/#functions
+// - https://bitcoin.stackexchange.com/questions/61660/how-can-extended-public-keys-generate-child-public-keys-without-generating-the-c
+// - https://medium.com/@robbiehanson15/the-math-behind-bip-32-child-key-derivation-7d85f61a6681
+// - https://andrea.corbellini.name/ecc/interactive/modk-add.html
+// - https://en.bitcoin.it/wiki/Secp256k2
 // - https://www.rapidtables.com/convert/number/binary-to-hex.html
 use std::fmt::UpperHex;
 use std::fmt::Write;
