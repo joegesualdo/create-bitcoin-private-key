@@ -1,3 +1,17 @@
+// Resources:
+// - https://bitcoin.stackexchange.com/questions/89814/how-does-bip-39-mnemonic-work
+// - https://learnmeabitcoin.com/technical/extended-keys
+// - https://learnmeabitcoin.com/technical/hd-wallets
+// - https://learnmeabitcoin.com/technical/mnemonic
+// - https://iancoleman.io/bip39/
+// - https://github.com/bitcoin/bips/blob/master/bip-0039/english.txt
+// - https://bitcoinbriefly.com/ultimate-guide-to-bitcoin-wallets-seeds-private-keys-public-keys-and-addresses/
+// - https://rust-lang-nursery.github.io/rust-cookbook/cryptography/encryption.html
+// - https://www.liavaag.org/English/SHA-Generator/HMAC/
+// - https://bitcointalk.org/index.php?topic=5288888.0
+// - https://medium.com/mycrypto/the-journey-from-mnemonic-phrase-to-address-6c5e86e11e14
+// - https://academy.bit2me.com/en/que-es-la-master-private-key/
+// - https://www.rapidtables.com/convert/number/binary-to-hex.html
 use std::fmt::UpperHex;
 use std::fmt::Write;
 use std::num::{NonZeroU32, ParseIntError};
