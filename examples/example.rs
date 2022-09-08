@@ -352,10 +352,11 @@ fn main() {
     let tweaked = sk
         .add_tweak(&master_private_secret_key.into())
         .expect("statistically impossible to hit");
-    let child_private_key: String = tweaked.display_secret().to_string();
-    let child_public_key = get_uncompressed_public_key_from_private_key(&child_private_key);
+    let hardened_child_private_key: String = tweaked.display_secret().to_string();
+    let child_public_key =
+        get_uncompressed_public_key_from_private_key(&hardened_child_private_key);
 
-    println!("child private key!!: {}", child_private_key);
+    println!("child private key!!: {}", hardened_child_private_key);
     println!("child chain code!!: {}", encode_hex(right));
     println!("child public key!!: {}", child_public_key);
 
@@ -407,10 +408,11 @@ fn main() {
     let tweaked = pk.add_exp_tweak(&secp, &sk.into()).unwrap();
 
     let child_public_key: String = tweaked.to_string();
+    let child_chain_code: String = encode_hex(right);
     // let child_public_key = get_uncompressed_public_key_from_private_key(&child_private_key);
 
     println!("child public key!!: {}", child_public_key);
-    println!("chain code!!: {}", encode_hex(right));
+    println!("chain code!!: {}", child_chain_code);
 
     // child_public_key: 030204d3503024160e8303c0042930ea92a9d671de9aa139c1867353f6b6664e60
     // child_chain_code: 05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31
@@ -419,11 +421,22 @@ fn main() {
     //
     //
     // DELETE
-    let parent_public_key =
-        "0252c616d91a2488c1fd1f0f172e98f7d1f6e51f8f389b2f8d632a8b490d5f6da9".to_string();
-    let chain_code = "05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31".to_string();
-    let private_key =
-        "39f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72".to_string();
+    // let parent_public_key =
+    //     "0252c616d91a2488c1fd1f0f172e98f7d1f6e51f8f389b2f8d632a8b490d5f6da9".to_string();
+    // let chain_code = "05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31".to_string();
+    // let private_key =
+    //     "39f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72".to_string();
+    // let public_key =
+    //     "030204d3503024160e8303c0042930ea92a9d671de9aa139c1867353f6b6664e59".to_string();
+    let parent_public_key = master_public_key;
+    println!("parent_public_key: {}", parent_public_key);
+    let chain_code = child_chain_code.clone();
+    println!("chain_code: {}", &child_chain_code);
+    let private_key = child_private_key;
+    println!("child_private_key: {}", &private_key);
+    let public_key = child_public_key;
+    println!("child_public_key: {}", &public_key);
+
     fn create_fingerprint(parent_public_key_hex: String) -> String {
         let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
         let mut hasher = Sha256::new();
@@ -470,13 +483,19 @@ fn main() {
         encoded
     }
 
+    // FOR XPUB: ---------------------------
+    let version = "0488b21e";
+    let key = format!("{}", public_key);
+    // FOR XPRV: --------------------
     let version = "0488ade4";
+    let key = format!("{}{}", "00", private_key);
+
     let depth = "01";
     let parent_fingerprint = create_fingerprint(parent_public_key);
     println!("parent_fingerprint: {}", parent_fingerprint);
     let child_number = "00000000";
     let chain_code = chain_code;
-    let key = format!("{}{}", "00", private_key);
+    // let key = format!("{}{}", "00", private_key);
     let serialized = format!(
         "{}{}{}{}{}{}",
         version, depth, parent_fingerprint, child_number, chain_code, key
