@@ -426,14 +426,11 @@ fn get_child_extended_private_key(
     return (child_private_key, child_chain_code, child_public_key);
 }
 
-fn main() {
-    // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
-    // Create array of length 32 and fill with a random u8;
-    let entropy = get_128_bits_of_entropy();
-
+fn get_mnemonic_words(entropy: [u8; 32]) -> Vec<String> {
     //let hex_string = "a4b836c41875815e8b153bc89091f1d85dd1ae47287289f5a50ff23cf41b8d21";
     //let hex_string = "da490f7254f80aa2f7e8dcb3c63a8404";
     let entropy_hex_string = get_hex_string_from_entropy_byte_array(&entropy);
+
     // let entropy_hex_string = "731180c4b776f6b961da802ff55b153f".to_string();
     let entropy_hex_byte_array = decode_hex(&entropy_hex_string).unwrap();
 
@@ -459,7 +456,9 @@ fn main() {
         })
         .collect();
     println!("{:?}", words);
-
+    words
+}
+fn get_bip38_512_bit_private_key(words: Vec<String>, passphrase: Option<String>) -> String {
     let mnemonic_sentence = words.join(" ");
     println!("{:?}", mnemonic_sentence);
 
@@ -470,7 +469,10 @@ fn main() {
     // let rng = SystemRandom::new();
 
     // Optional passphase
-    let passphrase = "woowee";
+    let passphrase = match passphrase {
+        Some(passphrase) => passphrase,
+        None => "".to_string(),
+    };
     let salt = format!("{}{}", "mnemonic", passphrase);
     let mut salt_as_bytes = salt.as_bytes().to_owned();
     // rand::thread_rng().fill_bytes(&mut salt);
@@ -493,8 +495,7 @@ fn main() {
 
     // DELETE
     // let bip39_seed = "21b70b9f412d3344188e48c9ddcbcd22b0a59d696e591414d39ae24fb6443398690edb17bac0e61391ba33904b1a095770add5bb4b3c3e0c967611ddcf769386".to_string();
-    let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
-    let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
+    // let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
 
     println!("bip39 seed: {:?}", bip39_seed);
     // println!("Salt: {}", HEXUPPER.encode(&salt));
@@ -510,8 +511,32 @@ fn main() {
         &pbkdf2_hash,
     );
     println!("should fail: {:?}", should_fail);
+    bip39_seed
+}
+
+fn main() {
+    // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
+    // Create array of length 32 and fill with a random u8;
+    let entropy = get_128_bits_of_entropy();
+
+    let words = get_mnemonic_words(entropy);
+    // let words = vec![
+    //     "punch".to_string(),
+    //     "shock".to_string(),
+    //     "entire".to_string(),
+    //     "north".to_string(),
+    //     "file".to_string(),
+    //     "identify".to_string(),
+    // ];
+    println!("{:?}", words);
+
+    // HARDCODED FOR TESTING
+    // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
+    // let bip39_seed = "c15c1702f28ebb0b7b9540a06a7896bc30ae8b0de25159dbf43dfd2e35033f664c431052acf5e2720988631630215251d87d372efe2d66fd290f664f006c294e".to_string();
+    let bip39_seed = get_bip38_512_bit_private_key(words, None);
 
     // =============================
+    let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
     let key = "Bitcoin seed";
     let h = HMAC::mac(pbkdf2_hash.to_vec(), key.as_bytes());
     println!("len: {:?}", h.len());
