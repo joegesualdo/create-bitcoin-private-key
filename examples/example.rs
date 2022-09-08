@@ -396,6 +396,7 @@ fn main() {
         .add_tweak(&master_private_secret_key.into())
         .expect("statistically impossible to hit");
 
+    // Source: "ckd_pub" function here: https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
     let secp = Secp256k1::new();
     let sk = secp256k1::SecretKey::from_str(&encode_hex(left)).unwrap();
     println!("PARENT PUBLIC KEY!!: {}", parent_public_key_hex);
@@ -411,4 +412,6 @@ fn main() {
 
     // child_public_key: 030204d3503024160e8303c0042930ea92a9d671de9aa139c1867353f6b6664e60
     // child_chain_code: 05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31
+
+    // ======================== SERIALIZE PRIVATE KEY ===================================
 }
