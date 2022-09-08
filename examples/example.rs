@@ -39,7 +39,6 @@ use rand_seeder::{Seeder, SipHasher};
 use ring::{digest, pbkdf2};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256, Sha512};
-
 pub fn convert_hex_to_decimal(hex: String) -> BigUint {
     println!("..{}", hex);
     let hex = "f9cf43a313496a007fe4fc1c4fb996238b4ace646d7ada0c1ffbf37653b991e9";
@@ -172,6 +171,87 @@ fn convert_binary_to_int(binary_string: &str) -> isize {
     let bin_idx = binary_string;
     let intval = isize::from_str_radix(bin_idx, 2).unwrap();
     intval
+}
+fn serialize_child_key(
+    key: &String,
+    parent_public_key: &String,
+    child_chain_code: &String,
+    is_public: bool,
+) -> String {
+    fn create_fingerprint(parent_public_key_hex: String) -> String {
+        let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
+        let mut hasher = Sha256::new();
+        // write input message
+        hasher.update(&hex_byte_array);
+        // read hash digest and consume hasher
+        let sha256_result = hasher.finalize();
+        let sha256_result_array = sha256_result.to_vec();
+
+        let ripemd160_result = ripemd160::Hash::hash(&sha256_result_array);
+        let first_four_bytes = &ripemd160_result[..4];
+        println!("{}", first_four_bytes.len());
+        let first_four_hex = encode_hex(&first_four_bytes);
+        first_four_hex
+    }
+
+    fn hash256(hex: &String) -> String {
+        let hex_byte_array = decode_hex(&hex).unwrap();
+        let mut hasher = Sha256::new();
+        // write input message
+        hasher.update(&hex_byte_array);
+        // read hash digest and consume hasher
+        let sha256_result = hasher.finalize();
+        let sha256_result_array = sha256_result.to_vec();
+
+        let hex_byte_array_2 = sha256_result_array;
+        let mut hasher_2 = Sha256::new();
+        // write input message
+        hasher_2.update(&hex_byte_array_2);
+        // read hash digest and consume hasher
+        let sha256_result_2 = hasher_2.finalize();
+        let sha256_result_array_2 = sha256_result_2.to_vec();
+        encode_hex(&sha256_result_array_2)
+    }
+    fn checksum(hex: &String) -> String {
+        let hash = hash256(&hex);
+        let hash_byte_array = decode_hex(&hash).unwrap();
+        let first_four_bytes = &hash_byte_array[0..=3];
+        encode_hex(first_four_bytes)
+    }
+
+    fn base58_encode(hex_byte_array: Vec<u8>) -> String {
+        let encoded = bitcoin::util::base58::encode_slice(&hex_byte_array);
+        encoded
+    }
+
+    let version = if is_public { "0488b21e" } else { "0488ade4" };
+    let key = if is_public {
+        format!("{}", key)
+    } else {
+        format!("{}{}", "00", key)
+    };
+
+    let depth = "01";
+    let parent_fingerprint = create_fingerprint(parent_public_key.to_string());
+    println!("parent_fingerprint: {}", parent_fingerprint);
+    let child_number = "00000000";
+    let chain_code = child_chain_code;
+    // let key = format!("{}{}", "00", private_key);
+    let serialized = format!(
+        "{}{}{}{}{}{}",
+        version, depth, parent_fingerprint, child_number, chain_code, key
+    );
+    let serialized_bytes = decode_hex(&serialized).unwrap();
+    println!("serialized: {}", serialized);
+    let checksum = checksum(&serialized);
+    println!("checksum: {}", checksum);
+    let checksum_bytes = decode_hex(&checksum).unwrap();
+    let serialized_with_checksum = format!("{}{}", serialized, checksum);
+    let serialized_with_checksum_bytes = concat_u8(&serialized_bytes, &checksum_bytes);
+    let base58_encoded_serialized_with_checksum = base58_encode(serialized_with_checksum_bytes);
+    base58_encoded_serialized_with_checksum
+    // checksum: 7a2a2640
+    // serialized: 0488ade401018c12590000000005aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e310039f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72
 }
 
 fn main() {
@@ -437,101 +517,15 @@ fn main() {
     // child_public_key: 030204d3503024160e8303c0042930ea92a9d671de9aa139c1867353f6b6664e60
     // child_chain_code: 05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31
 
-    // ======================== SERIALIZE PRIVATE KEY ===================================
-    //
-    //
-    // DELETE
-    // let parent_public_key =
-    //     "0252c616d91a2488c1fd1f0f172e98f7d1f6e51f8f389b2f8d632a8b490d5f6da9".to_string();
-    // let chain_code = "05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31".to_string();
-    // let private_key =
-    //     "39f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72".to_string();
-    // let public_key =
-    //     "030204d3503024160e8303c0042930ea92a9d671de9aa139c1867353f6b6664e59".to_string();
+    // ======================== SERIALIZE KEY ===================================
     let parent_public_key = master_public_key;
-    println!("parent_public_key: {}", parent_public_key);
     let chain_code = child_chain_code.clone();
-    println!("chain_code: {}", &child_chain_code);
     let private_key = child_private_key;
-    println!("child_private_key: {}", &private_key);
     let public_key = child_public_key;
-    println!("child_public_key: {}", &public_key);
 
-    fn create_fingerprint(parent_public_key_hex: String) -> String {
-        let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
-        let mut hasher = Sha256::new();
-        // write input message
-        hasher.update(&hex_byte_array);
-        // read hash digest and consume hasher
-        let sha256_result = hasher.finalize();
-        let sha256_result_array = sha256_result.to_vec();
-
-        let ripemd160_result = ripemd160::Hash::hash(&sha256_result_array);
-        let first_four_bytes = &ripemd160_result[..4];
-        println!("{}", first_four_bytes.len());
-        let first_four_hex = encode_hex(&first_four_bytes);
-        first_four_hex
-    }
-
-    fn hash256(hex: &String) -> String {
-        let hex_byte_array = decode_hex(&hex).unwrap();
-        let mut hasher = Sha256::new();
-        // write input message
-        hasher.update(&hex_byte_array);
-        // read hash digest and consume hasher
-        let sha256_result = hasher.finalize();
-        let sha256_result_array = sha256_result.to_vec();
-
-        let hex_byte_array_2 = sha256_result_array;
-        let mut hasher_2 = Sha256::new();
-        // write input message
-        hasher_2.update(&hex_byte_array_2);
-        // read hash digest and consume hasher
-        let sha256_result_2 = hasher_2.finalize();
-        let sha256_result_array_2 = sha256_result_2.to_vec();
-        encode_hex(&sha256_result_array_2)
-    }
-    fn checksum(hex: &String) -> String {
-        let hash = hash256(&hex);
-        let hash_byte_array = decode_hex(&hash).unwrap();
-        let first_four_bytes = &hash_byte_array[0..=3];
-        encode_hex(first_four_bytes)
-    }
-
-    fn base58_encode(hex_byte_array: Vec<u8>) -> String {
-        let encoded = bitcoin::util::base58::encode_slice(&hex_byte_array);
-        encoded
-    }
-
-    // FOR XPUB: ---------------------------
-    let version = "0488b21e";
-    let key = format!("{}", public_key);
-    // FOR XPRV: --------------------
-    let version = "0488ade4";
-    let key = format!("{}{}", "00", private_key);
-
-    let depth = "01";
-    let parent_fingerprint = create_fingerprint(parent_public_key);
-    println!("parent_fingerprint: {}", parent_fingerprint);
-    let child_number = "00000000";
-    let chain_code = chain_code;
-    // let key = format!("{}{}", "00", private_key);
-    let serialized = format!(
-        "{}{}{}{}{}{}",
-        version, depth, parent_fingerprint, child_number, chain_code, key
-    );
-    let serialized_bytes = decode_hex(&serialized).unwrap();
-    println!("serialized: {}", serialized);
-    let checksum = checksum(&serialized);
-    println!("checksum: {}", checksum);
-    let checksum_bytes = decode_hex(&checksum).unwrap();
-    let serialized_with_checksum = format!("{}{}", serialized, checksum);
-    let serialized_with_checksum_bytes = concat_u8(&serialized_bytes, &checksum_bytes);
-    let base58_encoded_serialized_with_checksum = base58_encode(serialized_with_checksum_bytes);
-    println!(
-        "extended_private_key: {}",
-        base58_encoded_serialized_with_checksum
-    );
-    // checksum: 7a2a2640
-    // serialized: 0488ade401018c12590000000005aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e310039f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72
+    let xpub = serialize_child_key(&public_key, &parent_public_key, &chain_code, true);
+    let xprv = serialize_child_key(&private_key, &parent_public_key, &chain_code, false);
+    println!("xpub: {}", xpub);
+    println!("xprv: {}", xprv);
+    // xprv9tuogRdb5YTgcL3P8Waj7REqDuQx4sXcodQaWTtEVFEp6yRKh1CjrWfXChnhgHeLDuXxo2auDZegMiVMGGxwxcrb2PmiGyCngLxvLeGsZRq
 }
