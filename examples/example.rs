@@ -6,6 +6,8 @@ use std::str::FromStr;
 use create_bitcoin_private_key::bip39::WORDS;
 use create_bitcoin_private_key::create_private_key;
 use hmac_sha512::HMAC;
+use num_bigint::BigInt;
+use num_bigint::BigUint;
 use rand::prelude::*;
 use rand::{random, rngs::StdRng, thread_rng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -15,6 +17,18 @@ use rand_seeder::{Seeder, SipHasher};
 use ring::{digest, pbkdf2};
 use secp256k1::{Secp256k1, SecretKey};
 use sha2::{Digest, Sha256, Sha512};
+
+pub fn convert_hex_to_decimal(hex: String) -> BigUint {
+    println!("..{}", hex);
+    let hex = "f9cf43a313496a007fe4fc1c4fb996238b4ace646d7ada0c1ffbf37653b991e9";
+    // let hex = "7e48c5ab7f43e4d9c17bd9712627dcc76d4df2099af7c8e5";
+    // let a: BigInt = 13083591726159223555551223938753535127604258367126228576140903598401097365714201702017529413442114868104244686915389844693808367317716621188940830798420643;
+    let z = hex.parse::<BigUint>().unwrap();
+    println!("big_num: {}", z);
+
+    // let z = BigUint::from_str(&hex, 16);
+    z
+}
 
 pub fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
     (0..s.len())
@@ -204,8 +218,9 @@ fn main() {
     let bip39_seed = encode_hex(&pbkdf2_hash);
 
     // DELETE
-    // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
-    // let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
+    // let bip39_seed = "21b70b9f412d3344188e48c9ddcbcd22b0a59d696e591414d39ae24fb6443398690edb17bac0e61391ba33904b1a095770add5bb4b3c3e0c967611ddcf769386".to_string();
+    let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
+    let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
 
     println!("bip39 seed: {:?}", bip39_seed);
     // println!("Salt: {}", HEXUPPER.encode(&salt));
@@ -239,6 +254,7 @@ fn main() {
     println!("master_chain_code: {:?}", encode_hex(master_chain_code));
     // How do I get master public key:
     // https://learnmeabitcoin.com/technical/extended-keys
+    // https://learnmeabitcoin.com/technical/hd-wallets
     fn get_uncompressed_public_key_from_private_key(private_key: &str) -> String {
         // Create 512 bit public key
         let secp = Secp256k1::new();
@@ -250,4 +266,42 @@ fn main() {
     }
     let master_public_key = get_uncompressed_public_key_from_private_key(&master_private_key_hex);
     println!("master_public_key: {:?}", master_public_key);
+
+    // =============================
+    let key = master_chain_code;
+    let index: i32 = 0;
+    let index_as_bytes = index.to_ne_bytes();
+    println!("BRO: {:?}", index_as_bytes);
+    let master_public_key_as_bytes = master_public_key.as_bytes();
+    let master_public_key_as_bytes = decode_hex(&master_public_key).unwrap();
+    let master_public_key_with_index_as_bytes =
+        concat_u8(&master_public_key_as_bytes, &index_as_bytes);
+    let h = HMAC::mac(master_public_key_with_index_as_bytes, key);
+    println!("len: {:?}", h.len());
+    println!("hmac: {:?}", encode_hex(&h));
+    println!("hmac: {:?}", h.len());
+    let left = &h[0..=31];
+    let right = &h[32..];
+    // let child_private_key = convert_hex_to_decimal(encode_hex(left)) as isize + convert_binary_to_int(&encode_hex(master_private_key));
+    // let left_binary = get_binary_string_for_byte_array(&left.to_vec());
+    // println!("left binary: {}", left_binary);
+    // let master_private_key_binary = get_binary_string_for_byte_array(&master_private_key.to_vec());
+    // println!("master_private_key_binary: {}", master_private_key_binary);
+    // let right_binary = get_binary_string_for_byte_array(&right.to_vec());
+    let sk = secp256k1::SecretKey::from_slice(left).expect("statistically impossible to hit");
+    // let secp = Secp256k1::new();
+    let master_private_secret_key = SecretKey::from_str(&encode_hex(master_private_key)).unwrap();
+
+    let tweaked = sk
+        .add_tweak(&master_private_secret_key.into())
+        .expect("statistically impossible to hit");
+    let child_private_key: String = tweaked.display_secret().to_string();
+    let child_public_key = get_uncompressed_public_key_from_private_key(&child_private_key);
+
+    println!("child private key!!: {}", child_private_key);
+    println!("child chain code!!: {}", encode_hex(right));
+    println!("child public key!!: {}", child_public_key);
+    // println!("left: {}", encode_hex(left));
+    // println!("master_private_key: {}", encode_hex(master_private_key));
+    // println!("{}", convert_hex_to_decimal("af".to_string()))
 }

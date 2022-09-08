@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 hmac-sha512 = "1.1.2"
+num-bigint = "0.4.3"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rand_pcg = "0.3.1"
