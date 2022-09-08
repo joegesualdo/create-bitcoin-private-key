@@ -513,6 +513,34 @@ fn get_bip38_512_bit_private_key(words: Vec<String>, passphrase: Option<String>)
     println!("should fail: {:?}", should_fail);
     bip39_seed
 }
+fn get_master_key_from_seed(bip39_seed: String) -> (String, String, String) {
+    let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
+    let key = "Bitcoin seed";
+    let h = HMAC::mac(pbkdf2_hash.to_vec(), key.as_bytes());
+    println!("len: {:?}", h.len());
+    println!("hmac: {:?}", encode_hex(&h));
+    println!("hmac: {:?}", h.len());
+    let left = &h[0..=31];
+    let master_private_key = left;
+    let master_private_key_hex = encode_hex(master_private_key);
+    let right = &h[32..];
+    let master_chain_code = right;
+    println!("left: {:?}", encode_hex(left));
+    println!("right: {:?}", encode_hex(right));
+    println!("master_private_key: {:?}", encode_hex(master_private_key));
+    println!("master_chain_code: {:?}", encode_hex(master_chain_code));
+
+    // How do I get master public key:
+    // https://learnmeabitcoin.com/technical/extended-keys
+    // https://learnmeabitcoin.com/technical/hd-wallets
+    let master_public_key = get_uncompressed_public_key_from_private_key(&master_private_key_hex);
+    println!("master_public_key: {:?}", master_public_key);
+    (
+        master_public_key,
+        master_private_key_hex,
+        encode_hex(master_chain_code),
+    )
+}
 
 fn main() {
     // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
@@ -531,53 +559,51 @@ fn main() {
     println!("{:?}", words);
 
     // HARDCODED FOR TESTING
-    // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
+    let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
     // let bip39_seed = "c15c1702f28ebb0b7b9540a06a7896bc30ae8b0de25159dbf43dfd2e35033f664c431052acf5e2720988631630215251d87d372efe2d66fd290f664f006c294e".to_string();
-    let bip39_seed = get_bip38_512_bit_private_key(words, None);
+    // let bip39_seed = get_bip38_512_bit_private_key(words, None);
 
     // =============================
-    let pbkdf2_hash = decode_hex(&bip39_seed).unwrap();
-    let key = "Bitcoin seed";
-    let h = HMAC::mac(pbkdf2_hash.to_vec(), key.as_bytes());
-    println!("len: {:?}", h.len());
-    println!("hmac: {:?}", encode_hex(&h));
-    println!("hmac: {:?}", h.len());
-    let left = &h[0..=31];
-    let master_private_key = left;
-    let master_private_key_hex = encode_hex(master_private_key);
-    let right = &h[32..];
-    let master_chain_code = right;
-    println!("left: {:?}", encode_hex(left));
-    println!("right: {:?}", encode_hex(right));
-    println!("master_private_key: {:?}", encode_hex(master_private_key));
-    println!("master_chain_code: {:?}", encode_hex(master_chain_code));
-    // How do I get master public key:
-    // https://learnmeabitcoin.com/technical/extended-keys
-    // https://learnmeabitcoin.com/technical/hd-wallets
-    let master_public_key = get_uncompressed_public_key_from_private_key(&master_private_key_hex);
-    println!("master_public_key: {:?}", master_public_key);
+    let (master_public_key_hex, master_private_key_hex, master_chain_code_hex) =
+        get_master_key_from_seed(bip39_seed);
+    println!("MASTER");
+    println!("mater private key!!: {}", master_private_key_hex);
+    println!("master chain code!!: {}", master_chain_code_hex);
+    println!("master public key!!: {}", master_public_key_hex);
+    let master_public_key_bytes = decode_hex(&master_public_key_hex).unwrap();
+    let master_private_key_bytes = decode_hex(&master_private_key_hex).unwrap();
+    let master_chain_code_bytes = decode_hex(&master_chain_code_hex).unwrap();
 
     // ============================= Normal Child extended private key ====================
-    let (child_private_key, child_chain_code, child_public_key) =
-        get_child_extended_private_key(master_chain_code, &master_public_key, master_private_key);
+    let (child_private_key, child_chain_code, child_public_key) = get_child_extended_private_key(
+        &master_chain_code_bytes,
+        &master_public_key_hex,
+        &master_private_key_bytes,
+    );
     println!("NOT HARDENED");
     println!("child private key!!: {}", child_private_key);
     println!("child chain code!!: {}", child_chain_code);
     println!("child public key!!: {}", child_public_key);
     // ============================= HARDENED Child extended private key ====================
     let (child_hardened_private_key, child_hardened_chain_code, child_hardened_public_key) =
-        get_hardened_child_extended_private_key(master_chain_code, master_private_key);
+        get_hardened_child_extended_private_key(
+            &master_chain_code_bytes,
+            &master_private_key_bytes,
+        );
     println!("HARDENED");
     println!("child private key!!: {}", child_hardened_private_key);
     println!("child chain code!!: {}", child_hardened_chain_code);
     println!("child public key!!: {}", child_hardened_public_key);
 
     // ============================= NORMAL Child extended public key ====================
-    let (child_public_key, child_chain_code) =
-        get_child_extended_public_key(master_chain_code, &master_public_key, master_private_key);
+    let (child_public_key, child_chain_code) = get_child_extended_public_key(
+        &master_chain_code_bytes,
+        &master_public_key_hex,
+        &master_private_key_bytes,
+    );
 
     // ======================== SERIALIZE KEY ===================================
-    let parent_public_key = master_public_key;
+    let parent_public_key = master_public_key_hex;
     let chain_code = child_chain_code.clone();
     let private_key = child_private_key;
     let public_key = child_public_key;
