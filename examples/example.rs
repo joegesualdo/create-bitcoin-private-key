@@ -3,6 +3,8 @@ use std::fmt::Write;
 use std::num::{NonZeroU32, ParseIntError};
 use std::str::FromStr;
 
+use bitcoin::hashes::{ripemd160, Hash};
+use bitcoin::util::base58::check_encode_slice;
 use create_bitcoin_private_key::bip39::WORDS;
 use create_bitcoin_private_key::create_private_key;
 use hmac_sha512::HMAC;
@@ -414,4 +416,83 @@ fn main() {
     // child_chain_code: 05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31
 
     // ======================== SERIALIZE PRIVATE KEY ===================================
+    //
+    //
+    // DELETE
+    let parent_public_key =
+        "0252c616d91a2488c1fd1f0f172e98f7d1f6e51f8f389b2f8d632a8b490d5f6da9".to_string();
+    let chain_code = "05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31".to_string();
+    let private_key =
+        "39f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72".to_string();
+    fn create_fingerprint(parent_public_key_hex: String) -> String {
+        let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
+        let mut hasher = Sha256::new();
+        // write input message
+        hasher.update(&hex_byte_array);
+        // read hash digest and consume hasher
+        let sha256_result = hasher.finalize();
+        let sha256_result_array = sha256_result.to_vec();
+
+        let ripemd160_result = ripemd160::Hash::hash(&sha256_result_array);
+        let first_four_bytes = &ripemd160_result[..4];
+        println!("{}", first_four_bytes.len());
+        let first_four_hex = encode_hex(&first_four_bytes);
+        first_four_hex
+    }
+
+    fn hash256(hex: &String) -> String {
+        let hex_byte_array = decode_hex(&hex).unwrap();
+        let mut hasher = Sha256::new();
+        // write input message
+        hasher.update(&hex_byte_array);
+        // read hash digest and consume hasher
+        let sha256_result = hasher.finalize();
+        let sha256_result_array = sha256_result.to_vec();
+
+        let hex_byte_array_2 = sha256_result_array;
+        let mut hasher_2 = Sha256::new();
+        // write input message
+        hasher_2.update(&hex_byte_array_2);
+        // read hash digest and consume hasher
+        let sha256_result_2 = hasher_2.finalize();
+        let sha256_result_array_2 = sha256_result_2.to_vec();
+        encode_hex(&sha256_result_array_2)
+    }
+    fn checksum(hex: &String) -> String {
+        let hash = hash256(&hex);
+        let hash_byte_array = decode_hex(&hash).unwrap();
+        let first_four_bytes = &hash_byte_array[0..=3];
+        encode_hex(first_four_bytes)
+    }
+
+    fn base58_encode(hex_byte_array: Vec<u8>) -> String {
+        let encoded = bitcoin::util::base58::encode_slice(&hex_byte_array);
+        encoded
+    }
+
+    let version = "0488ade4";
+    let depth = "01";
+    let parent_fingerprint = create_fingerprint(parent_public_key);
+    println!("parent_fingerprint: {}", parent_fingerprint);
+    let child_number = "00000000";
+    let chain_code = chain_code;
+    let key = format!("{}{}", "00", private_key);
+    let serialized = format!(
+        "{}{}{}{}{}{}",
+        version, depth, parent_fingerprint, child_number, chain_code, key
+    );
+    let serialized_bytes = decode_hex(&serialized).unwrap();
+    println!("serialized: {}", serialized);
+    let checksum = checksum(&serialized);
+    println!("checksum: {}", checksum);
+    let checksum_bytes = decode_hex(&checksum).unwrap();
+    let serialized_with_checksum = format!("{}{}", serialized, checksum);
+    let serialized_with_checksum_bytes = concat_u8(&serialized_bytes, &checksum_bytes);
+    let base58_encoded_serialized_with_checksum = base58_encode(serialized_with_checksum_bytes);
+    println!(
+        "extended_private_key: {}",
+        base58_encoded_serialized_with_checksum
+    );
+    // checksum: 7a2a2640
+    // serialized: 0488ade401018c12590000000005aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e310039f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72
 }
