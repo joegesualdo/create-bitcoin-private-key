@@ -315,6 +315,116 @@ fn get_child_extended_public_key(
     // child_chain_code: 05aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e31
     return (child_public_key, child_chain_code);
 }
+fn get_uncompressed_public_key_from_private_key(private_key: &str) -> String {
+    // Create 512 bit public key
+    let secp = Secp256k1::new();
+    let secret_key = SecretKey::from_str(private_key).unwrap();
+    // We're getting the OLDER uncompressed version of the public key:
+    //    Source: https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+    let public_key_uncompressed = secret_key.public_key(&secp).serialize();
+    encode_hex(&public_key_uncompressed)
+}
+fn get_hardened_child_extended_private_key(
+    master_chain_code: &[u8],
+    master_private_key: &[u8],
+) -> (String, String, String) {
+    println!("--------------------------------------");
+    let key = master_chain_code;
+    println!("MASTER CHAIN CODE: {:?}", encode_hex(key));
+    let index: u32 = 2147483648; // # child index number (must between 2**31 and 2**32-1)
+    let index_as_bytes = index.to_be_bytes();
+    println!("BRO: {:?}", index_as_bytes);
+    let master_private_key_as_bytes = master_private_key;
+    println!(
+        "PARENT PRIV KEY: {:?}",
+        encode_hex(master_private_key_as_bytes)
+    );
+    let prefix_bytes = decode_hex("00").unwrap();
+    let master_private_key_with_index_as_bytes =
+        concat_u8(master_private_key_as_bytes, &index_as_bytes);
+    let master_private_key_with_index_and_prefix_as_bytes =
+        concat_u8(&prefix_bytes, &master_private_key_with_index_as_bytes);
+    println!(
+        "data: {:?}",
+        encode_hex(&master_private_key_with_index_and_prefix_as_bytes)
+    );
+
+    let h = HMAC::mac(master_private_key_with_index_and_prefix_as_bytes, key);
+    println!("len: {:?}", h.len());
+    println!("hmac: {:?}", encode_hex(&h));
+    println!("hmac: {:?}", h.len());
+    let left = &h[0..=31];
+    let right = &h[32..];
+    // let child_private_key = convert_hex_to_decimal(encode_hex(left)) as isize + convert_binary_to_int(&encode_hex(master_private_key));
+    // let left_binary = get_binary_string_for_byte_array(&left.to_vec());
+    // println!("left binary: {}", left_binary);
+    // let master_private_key_binary = get_binary_string_for_byte_array(&master_private_key.to_vec());
+    // println!("master_private_key_binary: {}", master_private_key_binary);
+    // let right_binary = get_binary_string_for_byte_array(&right.to_vec());
+    //  Source: 'ckd_priv" function here: https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
+    let sk = secp256k1::SecretKey::from_slice(left).expect("statistically impossible to hit");
+    // let secp = Secp256k1::new();
+    let master_private_secret_key = SecretKey::from_str(&encode_hex(master_private_key)).unwrap();
+
+    let tweaked = sk
+        .add_tweak(&master_private_secret_key.into())
+        .expect("statistically impossible to hit");
+    let hardened_child_private_key: String = tweaked.display_secret().to_string();
+    let child_public_key =
+        get_uncompressed_public_key_from_private_key(&hardened_child_private_key);
+
+    let child_private_key = hardened_child_private_key;
+    let child_chain_code = encode_hex(right);
+    let child_public_key = child_public_key;
+    return (child_private_key, child_chain_code, child_public_key);
+}
+fn get_child_extended_private_key(
+    master_chain_code: &[u8],
+    master_public_key: &String,
+    master_private_key: &[u8],
+) -> (String, String, String) {
+    println!("--------------------------------------");
+    //
+    let key = master_chain_code;
+    let index: i32 = 0;
+    let index_as_bytes = index.to_be_bytes();
+    println!("BRO: {:?}", index_as_bytes);
+    let master_public_key_as_bytes = master_public_key.as_bytes();
+    let master_public_key_as_bytes = decode_hex(&master_public_key).unwrap();
+    let master_public_key_with_index_as_bytes =
+        concat_u8(&master_public_key_as_bytes, &index_as_bytes);
+    let h = HMAC::mac(master_public_key_with_index_as_bytes, key);
+    println!("len: {:?}", h.len());
+    println!("hmac: {:?}", encode_hex(&h));
+    println!("hmac: {:?}", h.len());
+    let left = &h[0..=31];
+    let right = &h[32..];
+    // let child_private_key = convert_hex_to_decimal(encode_hex(left)) as isize + convert_binary_to_int(&encode_hex(master_private_key));
+    // let left_binary = get_binary_string_for_byte_array(&left.to_vec());
+    // println!("left binary: {}", left_binary);
+    // let master_private_key_binary = get_binary_string_for_byte_array(&master_private_key.to_vec());
+    // println!("master_private_key_binary: {}", master_private_key_binary);
+    // let right_binary = get_binary_string_for_byte_array(&right.to_vec());
+    //  Source: 'ckd_priv" function here: https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
+    let sk = secp256k1::SecretKey::from_slice(left).expect("statistically impossible to hit");
+    // let secp = Secp256k1::new();
+    let master_private_secret_key = SecretKey::from_str(&encode_hex(master_private_key)).unwrap();
+
+    let tweaked = sk
+        .add_tweak(&master_private_secret_key.into())
+        .expect("statistically impossible to hit");
+    let child_private_key: String = tweaked.display_secret().to_string();
+    let child_public_key = get_uncompressed_public_key_from_private_key(&child_private_key);
+
+    // println!("left: {}", encode_hex(left));
+    // println!("master_private_key: {}", encode_hex(master_private_key));
+    // println!("{}", convert_hex_to_decimal("af".to_string()))
+
+    let child_private_key = child_private_key;
+    let child_chain_code = encode_hex(right);
+    let child_public_key = child_public_key;
+    return (child_private_key, child_chain_code, child_public_key);
+}
 
 fn main() {
     // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
@@ -419,108 +529,23 @@ fn main() {
     // How do I get master public key:
     // https://learnmeabitcoin.com/technical/extended-keys
     // https://learnmeabitcoin.com/technical/hd-wallets
-    fn get_uncompressed_public_key_from_private_key(private_key: &str) -> String {
-        // Create 512 bit public key
-        let secp = Secp256k1::new();
-        let secret_key = SecretKey::from_str(private_key).unwrap();
-        // We're getting the OLDER uncompressed version of the public key:
-        //    Source: https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
-        let public_key_uncompressed = secret_key.public_key(&secp).serialize();
-        encode_hex(&public_key_uncompressed)
-    }
     let master_public_key = get_uncompressed_public_key_from_private_key(&master_private_key_hex);
     println!("master_public_key: {:?}", master_public_key);
 
     // ============================= Normal Child extended private key ====================
-    println!("--------------------------------------");
-    //
-    let key = master_chain_code;
-    let index: i32 = 0;
-    let index_as_bytes = index.to_be_bytes();
-    println!("BRO: {:?}", index_as_bytes);
-    let master_public_key_as_bytes = master_public_key.as_bytes();
-    let master_public_key_as_bytes = decode_hex(&master_public_key).unwrap();
-    let master_public_key_with_index_as_bytes =
-        concat_u8(&master_public_key_as_bytes, &index_as_bytes);
-    let h = HMAC::mac(master_public_key_with_index_as_bytes, key);
-    println!("len: {:?}", h.len());
-    println!("hmac: {:?}", encode_hex(&h));
-    println!("hmac: {:?}", h.len());
-    let left = &h[0..=31];
-    let right = &h[32..];
-    // let child_private_key = convert_hex_to_decimal(encode_hex(left)) as isize + convert_binary_to_int(&encode_hex(master_private_key));
-    // let left_binary = get_binary_string_for_byte_array(&left.to_vec());
-    // println!("left binary: {}", left_binary);
-    // let master_private_key_binary = get_binary_string_for_byte_array(&master_private_key.to_vec());
-    // println!("master_private_key_binary: {}", master_private_key_binary);
-    // let right_binary = get_binary_string_for_byte_array(&right.to_vec());
-    //  Source: 'ckd_priv" function here: https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
-    let sk = secp256k1::SecretKey::from_slice(left).expect("statistically impossible to hit");
-    // let secp = Secp256k1::new();
-    let master_private_secret_key = SecretKey::from_str(&encode_hex(master_private_key)).unwrap();
-
-    let tweaked = sk
-        .add_tweak(&master_private_secret_key.into())
-        .expect("statistically impossible to hit");
-    let child_private_key: String = tweaked.display_secret().to_string();
-    let child_public_key = get_uncompressed_public_key_from_private_key(&child_private_key);
-
+    let (child_private_key, child_chain_code, child_public_key) =
+        get_child_extended_private_key(master_chain_code, &master_public_key, master_private_key);
+    println!("NOT HARDENED");
     println!("child private key!!: {}", child_private_key);
-    println!("child chain code!!: {}", encode_hex(right));
+    println!("child chain code!!: {}", child_chain_code);
     println!("child public key!!: {}", child_public_key);
-    // println!("left: {}", encode_hex(left));
-    // println!("master_private_key: {}", encode_hex(master_private_key));
-    // println!("{}", convert_hex_to_decimal("af".to_string()))
-
     // ============================= HARDENED Child extended private key ====================
-    println!("--------------------------------------");
-    let key = master_chain_code;
-    println!("MASTER CHAIN CODE: {:?}", encode_hex(key));
-    let index: u32 = 2147483648; // # child index number (must between 2**31 and 2**32-1)
-    let index_as_bytes = index.to_be_bytes();
-    println!("BRO: {:?}", index_as_bytes);
-    let master_private_key_as_bytes = master_private_key;
-    println!(
-        "PARENT PRIV KEY: {:?}",
-        encode_hex(master_private_key_as_bytes)
-    );
-    let prefix_bytes = decode_hex("00").unwrap();
-    let master_private_key_with_index_as_bytes =
-        concat_u8(master_private_key_as_bytes, &index_as_bytes);
-    let master_private_key_with_index_and_prefix_as_bytes =
-        concat_u8(&prefix_bytes, &master_private_key_with_index_as_bytes);
-    println!(
-        "data: {:?}",
-        encode_hex(&master_private_key_with_index_and_prefix_as_bytes)
-    );
-
-    let h = HMAC::mac(master_private_key_with_index_and_prefix_as_bytes, key);
-    println!("len: {:?}", h.len());
-    println!("hmac: {:?}", encode_hex(&h));
-    println!("hmac: {:?}", h.len());
-    let left = &h[0..=31];
-    let right = &h[32..];
-    // let child_private_key = convert_hex_to_decimal(encode_hex(left)) as isize + convert_binary_to_int(&encode_hex(master_private_key));
-    // let left_binary = get_binary_string_for_byte_array(&left.to_vec());
-    // println!("left binary: {}", left_binary);
-    // let master_private_key_binary = get_binary_string_for_byte_array(&master_private_key.to_vec());
-    // println!("master_private_key_binary: {}", master_private_key_binary);
-    // let right_binary = get_binary_string_for_byte_array(&right.to_vec());
-    //  Source: 'ckd_priv" function here: https://github.com/rust-bitcoin/rust-bitcoin/blob/master/src/util/bip32.rs
-    let sk = secp256k1::SecretKey::from_slice(left).expect("statistically impossible to hit");
-    // let secp = Secp256k1::new();
-    let master_private_secret_key = SecretKey::from_str(&encode_hex(master_private_key)).unwrap();
-
-    let tweaked = sk
-        .add_tweak(&master_private_secret_key.into())
-        .expect("statistically impossible to hit");
-    let hardened_child_private_key: String = tweaked.display_secret().to_string();
-    let child_public_key =
-        get_uncompressed_public_key_from_private_key(&hardened_child_private_key);
-
-    println!("child private key!!: {}", hardened_child_private_key);
-    println!("child chain code!!: {}", encode_hex(right));
-    println!("child public key!!: {}", child_public_key);
+    let (child_hardened_private_key, child_hardened_chain_code, child_hardened_public_key) =
+        get_hardened_child_extended_private_key(master_chain_code, master_private_key);
+    println!("HARDENED");
+    println!("child private key!!: {}", child_hardened_private_key);
+    println!("child chain code!!: {}", child_hardened_chain_code);
+    println!("child public key!!: {}", child_hardened_public_key);
 
     // ============================= NORMAL Child extended public key ====================
     let (child_public_key, child_chain_code) =
