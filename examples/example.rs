@@ -18,6 +18,10 @@
 // - https://andrea.corbellini.name/ecc/interactive/modk-add.html
 // - https://en.bitcoin.it/wiki/Secp256k2
 // - https://www.rapidtables.com/convert/number/binary-to-hex.html
+// - https://privatekeys.pw/calc
+// SOURCES GOOD FOR TESTING:
+// - https://iancoleman.io/bip39/
+// - http://bip32.org/
 use std::fmt::UpperHex;
 use std::fmt::Write;
 use std::num::{NonZeroU32, ParseIntError};
@@ -41,7 +45,7 @@ use ring::{digest, pbkdf2};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256, Sha512};
 
-const IS_TESTNET: bool = false;
+const IS_TESTNET: bool = true;
 
 pub fn convert_hex_to_decimal(hex: String) -> BigUint {
     let hex = "f9cf43a313496a007fe4fc1c4fb996238b4ace646d7ada0c1ffbf37653b991e9";
@@ -247,6 +251,7 @@ fn serialize_key(
         format!("{}{}", "00", key)
     };
 
+    // TODO: How do we change this
     let depth = "00";
     // TODO: Make it work for root and child
     // for root
@@ -256,6 +261,7 @@ fn serialize_key(
     };
     // for child
     // let parent_fingerprint = create_fingerprint(parent_public_key.to_string());
+    // TODO: How do we do children at other indexes other than 0. Like 1.
     let child_number = "00000000";
     let chain_code = child_chain_code;
     // let key = format!("{}{}", "00", private_key);
@@ -509,7 +515,6 @@ fn main() {
     // HARDCODED FOR TESTING
     // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
     // let bip39_seed = "c15c1702f28ebb0b7b9540a06a7896bc30ae8b0de25159dbf43dfd2e35033f664c431052acf5e2720988631630215251d87d372efe2d66fd290f664f006c294e".to_string();
-    // let bip39_seed = "861886d10365103f24811d3ffc8677884151f3745cc642ac0b5b8783f3e283867e3182c7ce9918fa4aacd33cb3582592e6d8c895d6ffae6c9e41089e66db0a9e".to_string();
     let bip39_seed = get_bip38_512_bit_private_key(words, None);
     println!("bip39_seed: {}", bip39_seed);
     //
