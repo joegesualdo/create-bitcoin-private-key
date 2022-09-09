@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 bitcoin = "0.29.1"
+bs58 = { version = "=0.4.0", features = ["check", "alloc", "std", "sha2"] }
 hmac-sha512 = "1.1.2"
 num-bigint = "0.4.3"
 rand = "0.8.5"
@@ -16,3 +17,4 @@ rand_seeder = "0.2.3"
 ring = "0.16.20"
 secp256k1 = { version = "0.24.0", features = ["rand"]}
 sha2 = "0.10.5"
+sha256 = "=1.0.3"
