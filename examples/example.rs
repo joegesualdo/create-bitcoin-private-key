@@ -183,6 +183,7 @@ fn serialize_key(
     child_chain_code: &String,
     is_public: bool,
     is_testnet: bool,
+    depth: Option<u64>,
 ) -> String {
     fn create_fingerprint(parent_public_key_hex: String) -> String {
         let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
@@ -368,10 +369,12 @@ fn get_child_extended_private_key(
     master_chain_code: &[u8],
     master_public_key: &String,
     master_private_key: &[u8],
+    child_index: i32,
 ) -> (String, String, String) {
     //
     let key = master_chain_code;
-    let index: i32 = 0;
+    // TODO: This is the child index !
+    let index: i32 = child_index;
     let index_as_bytes = index.to_be_bytes();
     let master_public_key_as_bytes = master_public_key.as_bytes();
     let master_public_key_as_bytes = decode_hex(&master_public_key).unwrap();
@@ -513,8 +516,8 @@ fn main() {
 
     // HARDCODED FOR TESTING
     // let bip39_seed = "67f93560761e20617de26e0cb84f7234aaf373ed2e66295c3d7397e6d7ebe882ea396d5d293808b0defd7edd2babd4c091ad942e6a9351e6d075a29d4df872af".to_string();
-    // let bip39_seed = "c15c1702f28ebb0b7b9540a06a7896bc30ae8b0de25159dbf43dfd2e35033f664c431052acf5e2720988631630215251d87d372efe2d66fd290f664f006c294e".to_string();
-    let bip39_seed = get_bip38_512_bit_private_key(words, None);
+    let bip39_seed = "b1680c7a6ea6ed5ac9bf3bc3b43869a4c77098e60195bae51a94159333820e125c3409b8c8d74b4489f28ce71b06799b1126c1d9620767c2dadf642cf787cf36".to_string();
+    // let bip39_seed = get_bip38_512_bit_private_key(words, None);
     println!("bip39_seed: {}", bip39_seed);
     //
 
@@ -539,6 +542,7 @@ fn main() {
         &master_chain_code_hex,
         false,
         IS_TESTNET,
+        None,
     );
     println!("master xprv key!!: {}", xprv);
     println!(
@@ -554,8 +558,11 @@ fn main() {
         &master_chain_code_bytes,
         &master_public_key_hex,
         &master_private_key_bytes,
+        0,
     );
     println!("NOT HARDENED");
+    println!("index 0!");
+
     println!("child private key!!: {}", child_private_key);
     println!(
         "child wif!!: {}",
@@ -565,8 +572,29 @@ fn main() {
     println!("child public key!!: {}", child_public_key);
 
     println!(
-        "address: {}",
+        "child address: {}",
         get_address_from_pub_key(&child_public_key, IS_TESTNET)
+    );
+    let (child_private_key_index_1, child_chain_code_index_1, child_public_key_index_1) =
+        get_child_extended_private_key(
+            &master_chain_code_bytes,
+            &master_public_key_hex,
+            &master_private_key_bytes,
+            1,
+        );
+    println!("index 1!");
+
+    println!("child private key!!: {}", child_private_key_index_1);
+    println!(
+        "child wif!!: {}",
+        get_wif_private_key(&child_private_key_index_1, IS_TESTNET, true)
+    );
+    println!("child chain code!!: {}", child_chain_code_index_1);
+    println!("child public key!!: {}", child_public_key_index_1);
+
+    println!(
+        "child address: {}",
+        get_address_from_pub_key(&child_public_key_index_1, IS_TESTNET)
     );
     // ============================= HARDENED Child extended private key ====================
     let (child_hardened_private_key, child_hardened_chain_code, child_hardened_public_key) =
@@ -598,6 +626,7 @@ fn main() {
         &chain_code,
         true,
         IS_TESTNET,
+        None,
     );
     let xprv = serialize_key(
         &private_key,
@@ -605,6 +634,7 @@ fn main() {
         &chain_code,
         false,
         IS_TESTNET,
+        None,
     );
     println!("SERIALIZED");
     println!("xpub: {}", xpub);
