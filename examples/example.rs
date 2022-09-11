@@ -40,7 +40,6 @@ use rand::{random, rngs::StdRng, thread_rng, Rng, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use rand_chacha::ChaCha8Rng;
 use rand_pcg::Pcg64;
-use rand_seeder::{Seeder, SipHasher};
 use ring::{digest, pbkdf2};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 use sha2::{Digest, Sha256, Sha512};
