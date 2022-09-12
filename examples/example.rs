@@ -541,6 +541,7 @@ fn main() {
     //     "identify".to_string(),
     // ];
     println!("{:?}", words);
+
     let mnemonic_sentence = words.join(" ");
     println!("sentence: {}", mnemonic_sentence);
 
@@ -554,21 +555,18 @@ fn main() {
     // =============================
     let master_keys = get_master_keys_from_seed(bip39_seed);
     println!("Master Keys: {:#?}", master_keys);
-    let master_private_key_hex = master_keys.private_key_hex;
-    let master_chain_code_hex = master_keys.chain_code_hex;
-    let master_public_key_hex = master_keys.public_key_hex;
 
     let should_compress_wif = true;
     let master_wif = get_wif_from_private_key(
-        &master_private_key_hex,
+        &master_keys.private_key_hex,
         // &"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         IS_TESTNET,
         should_compress_wif,
     );
     let xprv = serialize_key(SerializeKeyArgs {
-        key: master_private_key_hex.clone(),
+        key: master_keys.private_key_hex.clone(),
         parent_public_key: None,
-        child_chain_code: master_chain_code_hex.clone(),
+        child_chain_code: master_keys.chain_code_hex.clone(),
         is_public: false,
         is_testnet: IS_TESTNET,
         depth: Some(0),
@@ -577,14 +575,14 @@ fn main() {
     println!("master xprv key!!: {}", xprv);
     println!(
         "master address: {}",
-        get_address_from_pub_key(&master_public_key_hex, IS_TESTNET)
+        get_address_from_pub_key(&master_keys.public_key_hex, IS_TESTNET)
     );
-    let master_public_key_bytes = decode_hex(&master_public_key_hex).unwrap();
-    let master_private_key_bytes = decode_hex(&master_private_key_hex).unwrap();
-    let master_chain_code_bytes = decode_hex(&master_chain_code_hex).unwrap();
+    let master_public_key_bytes = decode_hex(&master_keys.public_key_hex).unwrap();
+    let master_private_key_bytes = decode_hex(&master_keys.private_key_hex).unwrap();
+    let master_chain_code_bytes = decode_hex(&master_keys.chain_code_hex).unwrap();
     // ============================= Normal Child extended private key ====================
     for child_index in 0..=5 {
-        let master_public_key_hex = master_public_key_hex.clone();
+        let master_public_key_hex = master_keys.public_key_hex.clone();
         let child_keys = get_child_extended_private_key(
             &master_chain_code_bytes,
             &master_public_key_hex.clone(),
@@ -657,7 +655,7 @@ fn main() {
             child_index,
             get_address_from_pub_key(&child_hardened_public_key, IS_TESTNET)
         );
-        let parent_public_key = master_public_key_hex.clone();
+        let parent_public_key = master_keys.public_key_hex.clone();
         let chain_code = child_hardened_chain_code.clone();
         let private_key = child_hardened_private_key;
         let public_key = child_hardened_public_key;
@@ -689,7 +687,7 @@ fn main() {
 
     let (child_public_key, child_chain_code) = get_child_extended_public_key(
         &master_chain_code_bytes,
-        &master_public_key_hex,
+        &master_keys.public_key_hex,
         &master_private_key_bytes,
     );
 
