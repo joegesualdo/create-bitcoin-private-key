@@ -306,6 +306,7 @@ fn serialize_key(args: SerializeKeyArgs) -> String {
     // checksum: 7a2a2640
     // serialized: 0488ade401018c12590000000005aae71d7c080474efaab01fa79e96f4c6cfe243237780b0df4bc36106228e310039f329fedba2a68e2a804fcd9aeea4104ace9080212a52ce8b52c1fb89850c72
 }
+
 fn get_child_extended_public_key(
     parent_chain_code: &[u8],
     parent_public_key: &String,
@@ -525,6 +526,285 @@ fn get_master_keys_from_seed(bip39_seed: String) -> Keys {
     };
     keys
 }
+fn print_child_keys(parent_keys: Keys, depth: u8, children_count: i32) {
+    // ============================= Normal Child extended private key ====================
+    let master_chain_code_bytes = decode_hex(&parent_keys.chain_code_hex).unwrap();
+    let master_private_key_bytes = decode_hex(&parent_keys.private_key_hex).unwrap();
+    for child_index in 0..=children_count {
+        let master_public_key_hex = parent_keys.public_key_hex.clone();
+        let child_keys = get_child_extended_private_key(
+            &master_chain_code_bytes,
+            &master_public_key_hex.clone(),
+            &master_private_key_bytes,
+            child_index,
+        );
+        println!("m/{}: {:#?}", child_index, child_keys);
+        let child_private_key = child_keys.private_key_hex;
+        let child_chain_code = child_keys.chain_code_hex;
+        let child_public_key = child_keys.public_key_hex;
+
+        println!(
+            "m/{} wif!!: {}",
+            child_index,
+            get_wif_from_private_key(&child_private_key, IS_TESTNET, true)
+        );
+
+        println!(
+            "m/{} address: {}",
+            child_index,
+            get_address_from_pub_key(&child_public_key, IS_TESTNET)
+        );
+        let parent_public_key = master_public_key_hex;
+        let chain_code = child_chain_code.clone();
+        let private_key = child_private_key;
+        let public_key = child_public_key;
+
+        let xpub = serialize_key(SerializeKeyArgs {
+            key: public_key,
+            parent_public_key: Some(parent_public_key.clone()),
+            child_chain_code: chain_code.clone(),
+            is_public: true,
+            is_testnet: IS_TESTNET,
+            depth: Some(depth),
+            child_index: child_index as u32,
+        });
+        let xprv = serialize_key(SerializeKeyArgs {
+            key: private_key,
+            parent_public_key: Some(parent_public_key),
+            child_chain_code: chain_code,
+            is_public: false,
+            is_testnet: IS_TESTNET,
+            depth: Some(depth),
+            child_index: child_index as u32,
+        });
+        println!("m/{} xpub: {}", child_index, xpub);
+        println!("m/{} xprv: {}", child_index, xprv);
+        println!("-------------------------------");
+    }
+    println!("===============================================");
+
+    for child_index in 0..=5 {
+        // ============================= HARDENED Child extended private key ====================
+        let child_keys_hardened = get_hardened_child_extended_private_key(
+            &master_chain_code_bytes,
+            &master_private_key_bytes,
+            child_index,
+        );
+        let child_hardened_private_key = child_keys_hardened.private_key_hex.clone();
+        let child_hardened_chain_code = child_keys_hardened.chain_code_hex.clone();
+        let child_hardened_public_key = child_keys_hardened.public_key_hex.clone();
+        println!("m/{}': {:#?}", child_index, &child_keys_hardened);
+        println!(
+            "m/{} wif!!: {}",
+            child_index,
+            get_wif_from_private_key(&child_hardened_private_key, IS_TESTNET, true)
+        );
+        println!(
+            "m/{}' address: {}",
+            child_index,
+            get_address_from_pub_key(&child_hardened_public_key, IS_TESTNET)
+        );
+        let parent_public_key = parent_keys.public_key_hex.clone();
+        let chain_code = child_hardened_chain_code.clone();
+        let private_key = child_hardened_private_key;
+        let public_key = child_hardened_public_key;
+
+        let xpub = serialize_key(SerializeKeyArgs {
+            key: public_key,
+            parent_public_key: Some(parent_public_key.clone()),
+            child_chain_code: chain_code.clone(),
+            is_public: true,
+            is_testnet: IS_TESTNET,
+            depth: Some(1),
+            child_index,
+        });
+        let xprv = serialize_key(SerializeKeyArgs {
+            key: private_key,
+            parent_public_key: Some(parent_public_key),
+            child_chain_code: chain_code,
+            is_public: false,
+            is_testnet: IS_TESTNET,
+            depth: Some(1),
+            child_index,
+        });
+        println!("m/{}' xpub: {}", child_index, xpub);
+        println!("m/{}' xprv: {}", child_index, xprv);
+        println!("-------------------------------");
+
+        // ============================= NORMAL Child extended public key ====================
+    }
+}
+fn get_wif_from_private_key(private_key: &String, testnet: bool, should_compress: bool) -> String {
+    // 0x80 is used for the version/application byte
+    // https://river.com/learn/terms/w/wallet-import-format-wif/#:~:text=WIF%20format%20adds%20a%20prefix,should%20use%20compressed%20SEC%20format.
+    let version_application_byte_for_mainnet = "80";
+    let version_application_byte_for_testnet = "ef";
+
+    let version_application_byte = if testnet {
+        version_application_byte_for_testnet
+    } else {
+        version_application_byte_for_mainnet
+    };
+    let private_key_hex = decode_hex(&private_key).unwrap();
+    let version_array = decode_hex(version_application_byte).unwrap();
+    // What does check encodings do?
+    //   - does a sha25 twice, then gets the first 4 bytes of that Result
+    //   - takes those first four bites and appends them to the original (version + hex array)
+    //   - Read "Ecoding a private key" section here: https://en.bitcoin.it/wiki/Base58Check_encoding
+    let end = "01";
+    let end_array = decode_hex(end).unwrap();
+    let combined_version_and_private_key_hex = concat_u8(&version_array, &private_key_hex);
+    let combined_version_and_private_key_hex_with_end_array = if should_compress {
+        concat_u8(&combined_version_and_private_key_hex, &end_array)
+    } else {
+        combined_version_and_private_key_hex
+    };
+    // TODO: THIS IS ONLY FOR COMPRESSED. How would we do uncompressed?
+    let wif_private_key = check_encode_slice(&combined_version_and_private_key_hex_with_end_array);
+    wif_private_key
+}
+fn get_address_from_pub_key_hash(public_key_hash: &String, is_testnet: bool) -> String {
+    // SEE ALL VERSION APPLICATION CODES HERE: https://en.bitcoin.it/wiki/List_of_address_prefixes
+    let p2pkh_version_application_byte = "00";
+    let p2pkh_testnet_version_application_byte = "6f";
+    let p2sh_version_application_byte = "05";
+
+    let version_application_byte = if is_testnet {
+        p2pkh_testnet_version_application_byte
+    } else {
+        p2pkh_version_application_byte
+    };
+    // let hex_array = Vec::from_hex(public_key_hash).unwrap();
+    let hex_array = decode_hex(&public_key_hash).unwrap();
+    let version_array = decode_hex(version_application_byte).unwrap();
+    let a = concat_u8(&version_array, &hex_array);
+    // What does check encodings do?
+    //   - does a sha25 twice, then gets the first 4 bytes of that Result
+    //   - takes those first four bites and appends them to the original (version + hex array)
+    //   - Read "Encoding a bitcoin address": https://en.bitcoin.it/wiki/Base58Check_encoding
+    let address = check_encode_slice(&a);
+    address
+}
+
+fn get_address_from_pub_key(pub_key: &String, is_testnet: bool) -> String {
+    let pub_key_hash = get_public_key_hash(pub_key);
+    let address = get_address_from_pub_key_hash(&pub_key_hash, is_testnet);
+    return address;
+}
+
+fn get_public_key_from_wif(wif: &String) -> String {
+    // Check: https://coinb.in/#verify
+    let private_key = convert_wif_to_private_key(&wif);
+    let public_key = get_public_key_from_private_key(&private_key, is_wif_compressed(&wif));
+    public_key
+}
+
+fn binary_to_hex(b: &str) -> Option<&str> {
+    match b {
+        "0000" => Some("0"),
+        "0001" => Some("1"),
+        "0010" => Some("2"),
+        "0011" => Some("3"),
+        "0100" => Some("4"),
+        "0101" => Some("5"),
+        "0110" => Some("6"),
+        "0111" => Some("7"),
+        "1000" => Some("8"),
+        "1001" => Some("9"),
+        "1010" => Some("A"),
+        "1011" => Some("B"),
+        "1100" => Some("C"),
+        "1101" => Some("D"),
+        "1110" => Some("E"),
+        "1111" => Some("F"),
+        _ => None,
+    }
+}
+fn convert_string_to_hex(s: &String) -> String {
+    let wif_bytes = s.as_bytes();
+    let binary = get_binary_string_for_byte_array(&wif_bytes.to_vec());
+
+    let mut s = String::new();
+    let mut b = String::new();
+    for byte in wif_bytes {
+        let binary_string = convert_to_binary_string(*byte, 8);
+
+        let first_4_binary = &binary_string[0..=3];
+        let first_4_hex = binary_to_hex(first_4_binary).unwrap();
+        let last_4_binary = &binary_string[4..=7];
+        let last_4_hex = binary_to_hex(last_4_binary).unwrap();
+        let to_p = format!("{}{}", first_4_hex, last_4_hex);
+
+        s.push_str(&to_p);
+    }
+    s
+}
+pub fn decode_binary(s: &str) -> Result<Vec<u8>, ParseIntError> {
+    (0..s.len())
+        .step_by(9)
+        .map(|i| u8::from_str_radix(&s[i..i + 8], 2))
+        .collect()
+}
+pub fn is_wif_compressed(wif: &String) -> bool {
+    // Source:https://en.bitcoin.it/wiki/Wallet_import_format
+    let first_char_of_wif = wif.chars().nth(0).unwrap();
+    let is_compressed_wif = first_char_of_wif == 'K'
+        || first_char_of_wif == 'L'
+        || first_char_of_wif == 'M'
+        || first_char_of_wif == 'c';
+    is_compressed_wif
+}
+fn convert_wif_to_private_key(wif: &String) -> String {
+    // Check: https://coinb.in/#verify
+    // Source:https://en.bitcoin.it/wiki/Wallet_import_format
+    // 1. decode the base58check
+
+    let is_compressed_wif = is_wif_compressed(wif);
+    let wif_base58check_decoded = from_check(&wif).unwrap();
+    // 2. drop the fist byte
+    // TODO: It's more complicated than this: "Drop the first byte (it should be 0x80, however
+    // legacy Electrum[1][2] or some SegWit vanity address generators[3] may use 0x81-0x87). If
+    // the private key corresponded to a compressed public key, also drop the last byte (it
+    // should be 0x01). If it corresponded to a compressed public key, the WIF string will have
+    // started with K or L (or M, if it's exported from legacy Electrum[1][2] etc[3]) instead
+    // of 5 (or c instead of 9 on testnet). This is the private key."
+    // Source: https://en.bitcoin.it/wiki/Wallet_import_format
+    let wif_base58check_decoded_without_first_byte = wif_base58check_decoded.get(1..).unwrap();
+    let wif_base58check_decoded_without_first_byte_and_adjusted_for_compression =
+        if is_compressed_wif {
+            wif_base58check_decoded_without_first_byte
+                .get(..=(wif_base58check_decoded_without_first_byte.len() - 2))
+                .unwrap()
+        } else {
+            wif_base58check_decoded_without_first_byte
+        };
+    let wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex =
+        encode_hex(wif_base58check_decoded_without_first_byte_and_adjusted_for_compression);
+    wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex
+}
+fn get_public_key_from_private_key(private_key: &String, is_compressed: bool) -> String {
+    // Create 512 bit public key
+    let secp = Secp256k1::new();
+    let secret_key = SecretKey::from_str(private_key).unwrap();
+    // We're getting the OLDER uncompressed version of the public key:
+    //    Source: https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+    let public_key = if is_compressed {
+        secret_key.public_key(&secp).serialize().to_vec()
+    } else {
+        secret_key
+            .public_key(&secp)
+            .serialize_uncompressed()
+            .to_vec()
+    };
+    encode_hex(&public_key)
+}
+fn get_public_key_hash(public_key: &String) -> String {
+    let hex_array = decode_hex(public_key).unwrap();
+    let public_key_sha256 = sha256::digest_bytes(&hex_array);
+    let public_key_sha256_as_hex_array = decode_hex(&public_key_sha256).unwrap();
+    let public_key_ripemd160 = ripemd160::Hash::hash(&public_key_sha256_as_hex_array);
+    public_key_ripemd160.to_string()
+}
 
 fn main() {
     // 1) Use some cryptographically secure entropy generator to generate 128 bits of entropy.
@@ -563,6 +843,7 @@ fn main() {
         IS_TESTNET,
         should_compress_wif,
     );
+    println!("master wif !!: {}", master_wif);
     let xprv = serialize_key(SerializeKeyArgs {
         key: master_keys.private_key_hex.clone(),
         parent_public_key: None,
@@ -577,301 +858,16 @@ fn main() {
         "master address: {}",
         get_address_from_pub_key(&master_keys.public_key_hex, IS_TESTNET)
     );
-    let master_public_key_bytes = decode_hex(&master_keys.public_key_hex).unwrap();
-    let master_private_key_bytes = decode_hex(&master_keys.private_key_hex).unwrap();
-    let master_chain_code_bytes = decode_hex(&master_keys.chain_code_hex).unwrap();
-    // ============================= Normal Child extended private key ====================
-    for child_index in 0..=5 {
-        let master_public_key_hex = master_keys.public_key_hex.clone();
-        let child_keys = get_child_extended_private_key(
-            &master_chain_code_bytes,
-            &master_public_key_hex.clone(),
-            &master_private_key_bytes,
-            child_index,
-        );
-        println!("m/{}: {:#?}", child_index, child_keys);
-        let child_private_key = child_keys.private_key_hex;
-        let child_chain_code = child_keys.chain_code_hex;
-        let child_public_key = child_keys.public_key_hex;
 
-        println!(
-            "m/{} wif!!: {}",
-            child_index,
-            get_wif_from_private_key(&child_private_key, IS_TESTNET, true)
-        );
-
-        println!(
-            "m/{} address: {}",
-            child_index,
-            get_address_from_pub_key(&child_public_key, IS_TESTNET)
-        );
-        let parent_public_key = master_public_key_hex;
-        let chain_code = child_chain_code.clone();
-        let private_key = child_private_key;
-        let public_key = child_public_key;
-
-        let xpub = serialize_key(SerializeKeyArgs {
-            key: public_key,
-            parent_public_key: Some(parent_public_key.clone()),
-            child_chain_code: chain_code.clone(),
-            is_public: true,
-            is_testnet: IS_TESTNET,
-            depth: Some(1),
-            child_index: child_index as u32,
-        });
-        let xprv = serialize_key(SerializeKeyArgs {
-            key: private_key,
-            parent_public_key: Some(parent_public_key),
-            child_chain_code: chain_code,
-            is_public: false,
-            is_testnet: IS_TESTNET,
-            depth: Some(1),
-            child_index: child_index as u32,
-        });
-        println!("m/{} xpub: {}", child_index, xpub);
-        println!("m/{} xprv: {}", child_index, xprv);
-        println!("-------------------------------");
-    }
-    println!("===============================================");
-
-    for child_index in 0..=5 {
-        // ============================= HARDENED Child extended private key ====================
-        let child_keys_hardened = get_hardened_child_extended_private_key(
-            &master_chain_code_bytes,
-            &master_private_key_bytes,
-            child_index,
-        );
-        let child_hardened_private_key = child_keys_hardened.private_key_hex.clone();
-        let child_hardened_chain_code = child_keys_hardened.chain_code_hex.clone();
-        let child_hardened_public_key = child_keys_hardened.public_key_hex.clone();
-        println!("m/{}': {:#?}", child_index, &child_keys_hardened);
-        println!(
-            "m/{} wif!!: {}",
-            child_index,
-            get_wif_from_private_key(&child_hardened_private_key, IS_TESTNET, true)
-        );
-        println!(
-            "m/{}' address: {}",
-            child_index,
-            get_address_from_pub_key(&child_hardened_public_key, IS_TESTNET)
-        );
-        let parent_public_key = master_keys.public_key_hex.clone();
-        let chain_code = child_hardened_chain_code.clone();
-        let private_key = child_hardened_private_key;
-        let public_key = child_hardened_public_key;
-
-        let xpub = serialize_key(SerializeKeyArgs {
-            key: public_key,
-            parent_public_key: Some(parent_public_key.clone()),
-            child_chain_code: chain_code.clone(),
-            is_public: true,
-            is_testnet: IS_TESTNET,
-            depth: Some(1),
-            child_index,
-        });
-        let xprv = serialize_key(SerializeKeyArgs {
-            key: private_key,
-            parent_public_key: Some(parent_public_key),
-            child_chain_code: chain_code,
-            is_public: false,
-            is_testnet: IS_TESTNET,
-            depth: Some(1),
-            child_index,
-        });
-        println!("m/{}' xpub: {}", child_index, xpub);
-        println!("m/{}' xprv: {}", child_index, xprv);
-        println!("-------------------------------");
-
-        // ============================= NORMAL Child extended public key ====================
-    }
-
-    let (child_public_key, child_chain_code) = get_child_extended_public_key(
-        &master_chain_code_bytes,
-        &master_keys.public_key_hex,
-        &master_private_key_bytes,
-    );
+    let depth = 1;
+    let children_count = 5;
+    print_child_keys(master_keys, depth, children_count);
 
     // ======================== SERIALIZE KEY ===================================
 
-    fn binary_to_hex(b: &str) -> Option<&str> {
-        match b {
-            "0000" => Some("0"),
-            "0001" => Some("1"),
-            "0010" => Some("2"),
-            "0011" => Some("3"),
-            "0100" => Some("4"),
-            "0101" => Some("5"),
-            "0110" => Some("6"),
-            "0111" => Some("7"),
-            "1000" => Some("8"),
-            "1001" => Some("9"),
-            "1010" => Some("A"),
-            "1011" => Some("B"),
-            "1100" => Some("C"),
-            "1101" => Some("D"),
-            "1110" => Some("E"),
-            "1111" => Some("F"),
-            _ => None,
-        }
-    }
-    fn convert_string_to_hex(s: &String) -> String {
-        let wif_bytes = s.as_bytes();
-        let binary = get_binary_string_for_byte_array(&wif_bytes.to_vec());
-
-        let mut s = String::new();
-        let mut b = String::new();
-        for byte in wif_bytes {
-            let binary_string = convert_to_binary_string(*byte, 8);
-
-            let first_4_binary = &binary_string[0..=3];
-            let first_4_hex = binary_to_hex(first_4_binary).unwrap();
-            let last_4_binary = &binary_string[4..=7];
-            let last_4_hex = binary_to_hex(last_4_binary).unwrap();
-            let to_p = format!("{}{}", first_4_hex, last_4_hex);
-
-            s.push_str(&to_p);
-        }
-        s
-    }
-    pub fn decode_binary(s: &str) -> Result<Vec<u8>, ParseIntError> {
-        (0..s.len())
-            .step_by(9)
-            .map(|i| u8::from_str_radix(&s[i..i + 8], 2))
-            .collect()
-    }
-    pub fn is_wif_compressed(wif: &String) -> bool {
-        // Source:https://en.bitcoin.it/wiki/Wallet_import_format
-        let first_char_of_wif = wif.chars().nth(0).unwrap();
-        let is_compressed_wif = first_char_of_wif == 'K'
-            || first_char_of_wif == 'L'
-            || first_char_of_wif == 'M'
-            || first_char_of_wif == 'c';
-        is_compressed_wif
-    };
-    fn convert_wif_to_private_key(wif: &String) -> String {
-        // Check: https://coinb.in/#verify
-        // Source:https://en.bitcoin.it/wiki/Wallet_import_format
-        // 1. decode the base58check
-
-        let is_compressed_wif = is_wif_compressed(wif);
-        let wif_base58check_decoded = from_check(&wif).unwrap();
-        // 2. drop the fist byte
-        // TODO: It's more complicated than this: "Drop the first byte (it should be 0x80, however
-        // legacy Electrum[1][2] or some SegWit vanity address generators[3] may use 0x81-0x87). If
-        // the private key corresponded to a compressed public key, also drop the last byte (it
-        // should be 0x01). If it corresponded to a compressed public key, the WIF string will have
-        // started with K or L (or M, if it's exported from legacy Electrum[1][2] etc[3]) instead
-        // of 5 (or c instead of 9 on testnet). This is the private key."
-        // Source: https://en.bitcoin.it/wiki/Wallet_import_format
-        let wif_base58check_decoded_without_first_byte = wif_base58check_decoded.get(1..).unwrap();
-        let wif_base58check_decoded_without_first_byte_and_adjusted_for_compression =
-            if is_compressed_wif {
-                wif_base58check_decoded_without_first_byte
-                    .get(..=(wif_base58check_decoded_without_first_byte.len() - 2))
-                    .unwrap()
-            } else {
-                wif_base58check_decoded_without_first_byte
-            };
-        let wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex =
-            encode_hex(wif_base58check_decoded_without_first_byte_and_adjusted_for_compression);
-        wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex
-    }
-    fn get_public_key_from_private_key(private_key: &String, is_compressed: bool) -> String {
-        // Create 512 bit public key
-        let secp = Secp256k1::new();
-        let secret_key = SecretKey::from_str(private_key).unwrap();
-        // We're getting the OLDER uncompressed version of the public key:
-        //    Source: https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
-        let public_key = if is_compressed {
-            secret_key.public_key(&secp).serialize().to_vec()
-        } else {
-            secret_key
-                .public_key(&secp)
-                .serialize_uncompressed()
-                .to_vec()
-        };
-        encode_hex(&public_key)
-    }
-    fn get_public_key_hash(public_key: &String) -> String {
-        let hex_array = decode_hex(public_key).unwrap();
-        let public_key_sha256 = sha256::digest_bytes(&hex_array);
-        let public_key_sha256_as_hex_array = decode_hex(&public_key_sha256).unwrap();
-        let public_key_ripemd160 = ripemd160::Hash::hash(&public_key_sha256_as_hex_array);
-        public_key_ripemd160.to_string()
-    }
-
     // This is for p2pkh. P2sh requires us to get address from redeem script:
     //      Source: https://en.bitcoin.it/wiki/Base58Check_encoding
-    fn get_address_from_pub_key_hash(public_key_hash: &String, is_testnet: bool) -> String {
-        // SEE ALL VERSION APPLICATION CODES HERE: https://en.bitcoin.it/wiki/List_of_address_prefixes
-        let p2pkh_version_application_byte = "00";
-        let p2pkh_testnet_version_application_byte = "6f";
-        let p2sh_version_application_byte = "05";
-
-        let version_application_byte = if is_testnet {
-            p2pkh_testnet_version_application_byte
-        } else {
-            p2pkh_version_application_byte
-        };
-        // let hex_array = Vec::from_hex(public_key_hash).unwrap();
-        let hex_array = decode_hex(&public_key_hash).unwrap();
-        let version_array = decode_hex(version_application_byte).unwrap();
-        let a = concat_u8(&version_array, &hex_array);
-        // What does check encodings do?
-        //   - does a sha25 twice, then gets the first 4 bytes of that Result
-        //   - takes those first four bites and appends them to the original (version + hex array)
-        //   - Read "Encoding a bitcoin address": https://en.bitcoin.it/wiki/Base58Check_encoding
-        let address = check_encode_slice(&a);
-        address
-    }
-
-    fn get_address_from_pub_key(pub_key: &String, is_testnet: bool) -> String {
-        let pub_key_hash = get_public_key_hash(pub_key);
-        let address = get_address_from_pub_key_hash(&pub_key_hash, is_testnet);
-        return address;
-    }
-
-    fn get_public_key_from_wif(wif: &String) -> String {
-        // Check: https://coinb.in/#verify
-        let private_key = convert_wif_to_private_key(&wif);
-        let public_key = get_public_key_from_private_key(&private_key, is_wif_compressed(&wif));
-        public_key
-    }
     // https://en.bitcoin.it/wiki/Wallet_import_format
-    fn get_wif_from_private_key(
-        private_key: &String,
-        testnet: bool,
-        should_compress: bool,
-    ) -> String {
-        // 0x80 is used for the version/application byte
-        // https://river.com/learn/terms/w/wallet-import-format-wif/#:~:text=WIF%20format%20adds%20a%20prefix,should%20use%20compressed%20SEC%20format.
-        let version_application_byte_for_mainnet = "80";
-        let version_application_byte_for_testnet = "ef";
-
-        let version_application_byte = if testnet {
-            version_application_byte_for_testnet
-        } else {
-            version_application_byte_for_mainnet
-        };
-        let private_key_hex = decode_hex(&private_key).unwrap();
-        let version_array = decode_hex(version_application_byte).unwrap();
-        // What does check encodings do?
-        //   - does a sha25 twice, then gets the first 4 bytes of that Result
-        //   - takes those first four bites and appends them to the original (version + hex array)
-        //   - Read "Ecoding a private key" section here: https://en.bitcoin.it/wiki/Base58Check_encoding
-        let end = "01";
-        let end_array = decode_hex(end).unwrap();
-        let combined_version_and_private_key_hex = concat_u8(&version_array, &private_key_hex);
-        let combined_version_and_private_key_hex_with_end_array = if should_compress {
-            concat_u8(&combined_version_and_private_key_hex, &end_array)
-        } else {
-            combined_version_and_private_key_hex
-        };
-        // TODO: THIS IS ONLY FOR COMPRESSED. How would we do uncompressed?
-        let wif_private_key =
-            check_encode_slice(&combined_version_and_private_key_hex_with_end_array);
-        wif_private_key
-    }
     let wif = "cVqiHrR4Np794LvwkkhQAgZxuJJKBWFC4stcfVNU7uEKBH5PstuY".to_string();
     // let wif = "5Hxduv8nd2c1hWeqykF5ennykqZQ6CBWs8bgWbZ2LxKVdrEFmcW".to_string();
     let private_key = convert_wif_to_private_key(&wif);
