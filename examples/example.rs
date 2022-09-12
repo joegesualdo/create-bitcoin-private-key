@@ -53,6 +53,12 @@ struct Keys {
     chain_code_hex: String,
 }
 
+pub fn convert_decimal_to_32_byte_hex_with(num: u32) -> String {
+    format!("{:08x}", num)
+}
+pub fn convert_decimal_to_8_byte_hex_with(num: u8) -> String {
+    format!("{:02x}", num)
+}
 pub fn convert_hex_to_decimal(hex: String) -> BigUint {
     let hex = "f9cf43a313496a007fe4fc1c4fb996238b4ace646d7ada0c1ffbf37653b991e9";
     // let hex = "7e48c5ab7f43e4d9c17bd9712627dcc76d4df2099af7c8e5";
@@ -191,7 +197,8 @@ struct SerializeKeyArgs {
     child_chain_code: String,
     is_public: bool,
     is_testnet: bool,
-    depth: Option<u64>,
+    depth: Option<u8>,
+    child_index: u32,
 }
 
 fn serialize_key(args: SerializeKeyArgs) -> String {
@@ -202,6 +209,7 @@ fn serialize_key(args: SerializeKeyArgs) -> String {
         is_public,
         is_testnet,
         depth,
+        child_index,
     } = args;
     fn create_fingerprint(parent_public_key_hex: String) -> String {
         let hex_byte_array = decode_hex(&parent_public_key_hex).unwrap();
@@ -270,7 +278,7 @@ fn serialize_key(args: SerializeKeyArgs) -> String {
     };
 
     // TODO: How do we change this
-    let depth = "00";
+    let depth = convert_decimal_to_8_byte_hex_with(depth.unwrap_or(0));
     // TODO: Make it work for root and child
     // for root
     let parent_fingerprint = match parent_public_key {
@@ -280,7 +288,7 @@ fn serialize_key(args: SerializeKeyArgs) -> String {
     // for child
     // let parent_fingerprint = create_fingerprint(parent_public_key.to_string());
     // TODO: How do we do children at other indexes other than 0. Like 1.
-    let child_number = "00000000";
+    let child_number = convert_decimal_to_32_byte_hex_with(child_index);
     let chain_code = child_chain_code;
     // let key = format!("{}{}", "00", private_key);
     let serialized = format!(
@@ -551,7 +559,7 @@ fn main() {
     let master_public_key_hex = master_keys.public_key_hex;
 
     let should_compress_wif = true;
-    let master_wif = get_wif_private_key(
+    let master_wif = get_wif_from_private_key(
         &master_private_key_hex,
         // &"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
         IS_TESTNET,
@@ -563,7 +571,8 @@ fn main() {
         child_chain_code: master_chain_code_hex.clone(),
         is_public: false,
         is_testnet: IS_TESTNET,
-        depth: None,
+        depth: Some(0),
+        child_index: 0,
     });
     println!("master xprv key!!: {}", xprv);
     println!(
@@ -590,7 +599,7 @@ fn main() {
         println!(
             "m/{} wif!!: {}",
             child_index,
-            get_wif_private_key(&child_private_key, IS_TESTNET, true)
+            get_wif_from_private_key(&child_private_key, IS_TESTNET, true)
         );
 
         println!(
@@ -609,7 +618,8 @@ fn main() {
             child_chain_code: chain_code.clone(),
             is_public: true,
             is_testnet: IS_TESTNET,
-            depth: None,
+            depth: Some(1),
+            child_index: child_index as u32,
         });
         let xprv = serialize_key(SerializeKeyArgs {
             key: private_key,
@@ -617,7 +627,8 @@ fn main() {
             child_chain_code: chain_code,
             is_public: false,
             is_testnet: IS_TESTNET,
-            depth: None,
+            depth: Some(1),
+            child_index: child_index as u32,
         });
         println!("m/{} xpub: {}", child_index, xpub);
         println!("m/{} xprv: {}", child_index, xprv);
@@ -636,6 +647,41 @@ fn main() {
         let child_hardened_chain_code = child_keys_hardened.chain_code_hex.clone();
         let child_hardened_public_key = child_keys_hardened.public_key_hex.clone();
         println!("m/{}': {:#?}", child_index, &child_keys_hardened);
+        println!(
+            "m/{} wif!!: {}",
+            child_index,
+            get_wif_from_private_key(&child_hardened_private_key, IS_TESTNET, true)
+        );
+        println!(
+            "m/{}' address: {}",
+            child_index,
+            get_address_from_pub_key(&child_hardened_public_key, IS_TESTNET)
+        );
+        let parent_public_key = master_public_key_hex.clone();
+        let chain_code = child_hardened_chain_code.clone();
+        let private_key = child_hardened_private_key;
+        let public_key = child_hardened_public_key;
+
+        let xpub = serialize_key(SerializeKeyArgs {
+            key: public_key,
+            parent_public_key: Some(parent_public_key.clone()),
+            child_chain_code: chain_code.clone(),
+            is_public: true,
+            is_testnet: IS_TESTNET,
+            depth: Some(1),
+            child_index,
+        });
+        let xprv = serialize_key(SerializeKeyArgs {
+            key: private_key,
+            parent_public_key: Some(parent_public_key),
+            child_chain_code: chain_code,
+            is_public: false,
+            is_testnet: IS_TESTNET,
+            depth: Some(1),
+            child_index,
+        });
+        println!("m/{}' xpub: {}", child_index, xpub);
+        println!("m/{}' xprv: {}", child_index, xprv);
         println!("-------------------------------");
 
         // ============================= NORMAL Child extended public key ====================
@@ -730,7 +776,6 @@ fn main() {
             };
         let wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex =
             encode_hex(wif_base58check_decoded_without_first_byte_and_adjusted_for_compression);
-        println!("is compressed: {}", is_compressed_wif);
         wif_base58check_decoded_without_first_byte_and_adjusted_for_compression_hex
     }
     fn get_public_key_from_private_key(private_key: &String, is_compressed: bool) -> String {
@@ -795,7 +840,11 @@ fn main() {
         public_key
     }
     // https://en.bitcoin.it/wiki/Wallet_import_format
-    fn get_wif_private_key(private_key: &String, testnet: bool, should_compress: bool) -> String {
+    fn get_wif_from_private_key(
+        private_key: &String,
+        testnet: bool,
+        should_compress: bool,
+    ) -> String {
         // 0x80 is used for the version/application byte
         // https://river.com/learn/terms/w/wallet-import-format-wif/#:~:text=WIF%20format%20adds%20a%20prefix,should%20use%20compressed%20SEC%20format.
         let version_application_byte_for_mainnet = "80";
@@ -835,6 +884,8 @@ fn main() {
     println!("private key: {}", private_key);
     println!("public key: {}", public_key);
     println!("address : {}", address);
+
+    println!("{}", convert_decimal_to_8_byte_hex_with(255));
 
     // TODO ITEM: Generate a bech32 address from a private key/wif
     // Can check work here: https://secretscan.org/Bech32
