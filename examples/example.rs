@@ -928,7 +928,29 @@ fn main() {
 
     let found_child =
         get_child_key_from_derivation_path("m/0/0/1".to_string(), master_keys.clone());
-    println!("here!: {:#?}", found_child);
+    let found_child_xpub = serialize_key(SerializeKeyArgs {
+        key: found_child.public_key_hex.clone(),
+        parent_public_key: Some(master_keys.public_key_hex.clone()),
+        child_chain_code: found_child.chain_code_hex.clone(),
+        is_public: true,
+        is_testnet: IS_TESTNET,
+        depth: Some(3),
+        child_index: 1 as u32,
+    });
+    let found_child_xprv = serialize_key(SerializeKeyArgs {
+        key: found_child.private_key_hex.clone(),
+        parent_public_key: Some(master_keys.public_key_hex.clone()),
+        child_chain_code: found_child.chain_code_hex.clone(),
+        is_public: false,
+        is_testnet: IS_TESTNET,
+        depth: Some(3),
+        child_index: 1 as u32,
+    });
+    println!("found child!: {:#?}", found_child);
+    println!("found child xpub!: {:#?}", found_child_xpub);
+    println!("found child xprv!: {:#?}", found_child_xprv);
+    println!("found child address!: {:#?}", found_child.get_address());
+    println!("found child wif!: {:#?}", found_child.get_wif());
     let found_children = get_child_keys_from_derivation_path("m/0/0/1".to_string(), master_keys, 5);
     println!("found children!: {:#?}", found_children);
     // get_child_keys(&master_keys, children_count, true);
